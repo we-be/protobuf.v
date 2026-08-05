@@ -12,8 +12,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    # setup-v drops the whole V toolchain into the workspace root, and
+    # v fmt/test recurse — keep our tree in a subdir so they never meet
+    defaults:
+      run:
+        working-directory: repo
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: repo
 
       - name: Setup V
         uses: vlang/setup-v@v1
