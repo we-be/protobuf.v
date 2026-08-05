@@ -41,6 +41,15 @@ pub fn (mut e Encoder) write_len_prefixed(b []u8) {
 	e.buf << b
 }
 
+// untagged float writes, for packed repeated payloads
+pub fn (mut e Encoder) write_f32(v f32) {
+	e.write_fixed32(math.f32_bits(v))
+}
+
+pub fn (mut e Encoder) write_f64(v f64) {
+	e.write_fixed64(math.f64_bits(v))
+}
+
 // int32/int64/enum negatives sign-extend to 64 bits: always 10 bytes on the wire.
 pub fn (mut e Encoder) write_int32_field(field u32, v int) {
 	e.write_tag(field, .varint)
