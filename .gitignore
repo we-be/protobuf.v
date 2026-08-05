@@ -3,3 +3,6 @@
 *.dylib
 protobuf
 main
+harness
+interop/out/
+addressbook.bin

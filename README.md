@@ -7,6 +7,9 @@ Why: V has no maintained protobuf library — [vproto](https://github.com/emily3
 ## Status
 
 - [x] Wire runtime: varints, zigzag, fixed32/64, length-delimited, tags, unknown-field skipping
+- [x] Cross-validated against protoc (`interop/run.sh`): 300 fuzzed messages over every scalar type, byte-for-byte identical serialization both directions
+- [x] Decoder fuzzing: 17k random/mutated buffers, errors only, no crashes
+- [x] PoC app: [examples/addressbook](examples/addressbook) — CLI whose data file protoc reads natively, and vice versa
 - [ ] `.proto` parser + V codegen (proto3 subset: messages, nested messages, enums, repeated/packed)
 - [ ] maps + oneof
 - [ ] sqlc process-plugin PoC (protobuf `CodeGenRequest`/`CodeGenResponse` over stdin/stdout)
@@ -61,8 +64,26 @@ fn Person.decode(buf []u8) !Person {
 
 ## Tests
 
-Golden byte vectors from the [protobuf encoding docs](https://protobuf.dev/programming-guides/encoding/), boundary roundtrips, and malformed-input cases:
+Golden byte vectors from the [protobuf encoding docs](https://protobuf.dev/programming-guides/encoding/), boundary roundtrips, malformed-input cases, and deterministic decoder fuzzing:
 
 ```sh
 v test .
+```
+
+The interop suite uses protoc as an oracle — V encodes fuzzed messages, protoc decodes and re-encodes them, bytes must match exactly, then V decodes protoc's bytes back to the original values:
+
+```sh
+interop/run.sh          # 300 messages, seed 42
+interop/run.sh 1000 7   # more messages, different seed
+```
+
+## Example
+
+[examples/addressbook](examples/addressbook) — the classic protobuf tutorial app as a V CLI. Its data file is a real `tutorial.AddressBook`:
+
+```sh
+cd examples/addressbook
+v run . add "Ada Lovelace" --email ada@analytical.uk --mobile +44-555-0100
+v run . list
+protoc --decode=tutorial.AddressBook addressbook.proto < addressbook.bin
 ```

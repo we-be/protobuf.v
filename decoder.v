@@ -93,6 +93,14 @@ pub fn (mut d Decoder) read_sint64() !i64 {
 	return zigzag_decode(d.read_varint()!)
 }
 
+pub fn (mut d Decoder) read_sfixed32() !int {
+	return int(d.read_fixed32()!)
+}
+
+pub fn (mut d Decoder) read_sfixed64() !i64 {
+	return i64(d.read_fixed64()!)
+}
+
 pub fn (mut d Decoder) read_bool() !bool {
 	return d.read_varint()! != 0
 }
