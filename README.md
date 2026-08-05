@@ -1,6 +1,20 @@
 # protobuf
 
+[![CI](https://github.com/we-be/protobuf.v/actions/workflows/ci.yml/badge.svg)](https://github.com/we-be/protobuf.v/actions/workflows/ci.yml)
+
 Protocol Buffers (proto3) for V. Wire-format runtime today; `.proto` → V code generation next.
+
+## Install
+
+```sh
+v install --git https://github.com/we-be/protobuf.v
+```
+
+Then:
+
+```v
+import protobuf
+```
 
 Why: V has no maintained protobuf library — [vproto](https://github.com/emily33901/vproto) has been abandoned since 2022 and breaks against current compilers, protobuf-v never worked. Things worth building in V (a sqlc plugin, gRPC once V's HTTP/2 lands) speak protobuf.
 
