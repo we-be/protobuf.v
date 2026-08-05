@@ -24,13 +24,21 @@ Why: V has no maintained protobuf library — [vproto](https://github.com/emily3
 - [x] Cross-validated against protoc (`interop/run.sh`): 300 fuzzed messages over every scalar type, byte-for-byte identical serialization both directions
 - [x] Decoder fuzzing: 17k random/mutated buffers, errors only, no crashes
 - [x] PoC app: [examples/addressbook](examples/addressbook) — CLI whose data file protoc reads natively, and vice versa
-- [ ] `.proto` parser + V codegen (proto3 subset: messages, nested messages, enums, repeated/packed)
+- [x] `.proto` → V codegen (`cmd/vpbgen`): messages, nested types, enums, repeated/packed, `optional` — validated against protoc by the same byte oracle
 - [ ] maps + oneof
 - [ ] sqlc process-plugin PoC (protobuf `CodeGenRequest`/`CodeGenResponse` over stdin/stdout)
 
 ## Usage
 
-Hand-written today, generated tomorrow — this is exactly the shape codegen will emit:
+Generate V code from a `.proto` file:
+
+```sh
+v run cmd/vpbgen -m main -o person_pb.v person.proto
+```
+
+Every message becomes a struct with `encode() []u8` and a static `decode(buf) !T`. Proto3 semantics carry over: `optional` scalars and singular message fields map to `?T` (absent ≠ zero), enums are open (unknown values survive roundtrips), repeated scalars are packed unless `[packed = false]`.
+
+The generated code is exactly this shape, which you can also write by hand against the wire runtime:
 
 ```v
 import protobuf
@@ -84,7 +92,7 @@ Golden byte vectors from the [protobuf encoding docs](https://protobuf.dev/progr
 v test .
 ```
 
-The interop suite uses protoc as an oracle — V encodes fuzzed messages, protoc decodes and re-encodes them, bytes must match exactly, then V decodes protoc's bytes back to the original values:
+The interop suite uses protoc as an oracle — vpbgen-generated code encodes fuzzed messages, protoc decodes and re-encodes them, bytes must match exactly, then the generated decoder reads protoc's bytes back to the original values:
 
 ```sh
 interop/run.sh          # 300 messages, seed 42
