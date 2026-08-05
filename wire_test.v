@@ -131,12 +131,14 @@ fn test_sint_fields() ! {
 	assert d.read_sint32()! == -1
 
 	mut e2 := Encoder{}
-	e2.write_sint64_field(1, -123456789012345)
+	// explicit i64: an untyped literal here miscompiles on macos-arm64
+	// (V 0.5.2 release) — the assert's RHS truncates to 32 bits
+	e2.write_sint64_field(1, i64(-123456789012345))
 	mut d2 := Decoder{
 		buf: e2.buf
 	}
 	_, _ := d2.read_tag()!
-	assert d2.read_sint64()! == -123456789012345
+	assert d2.read_sint64()! == i64(-123456789012345)
 }
 
 fn test_float_double() ! {
