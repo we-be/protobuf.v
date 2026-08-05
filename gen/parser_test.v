@@ -92,7 +92,18 @@ fn test_rejections() {
 		'duplicate field number')
 	expect_parse_error('syntax = "proto3"; message M { int32 a = 0; }', 'out of range')
 	expect_parse_error('syntax = "proto3"; enum E { A = 1; }', 'first value')
-	expect_parse_error('syntax = "proto3"; service S { }', 'service')
+}
+
+fn test_services_are_skipped() ! {
+	f := parse('syntax = "proto3";
+service CodegenService {
+	rpc Generate (GenerateRequest) returns (GenerateResponse) {
+		option idempotency_level = NO_SIDE_EFFECTS;
+	}
+}
+message GenerateRequest { int32 x = 1; }')!
+	assert f.messages.len == 1
+	assert f.messages[0].name == 'GenerateRequest'
 }
 
 fn test_enum_negative_and_options() ! {

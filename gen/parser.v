@@ -243,7 +243,23 @@ pub fn parse(src string) !File {
 				f.enums << p.parse_enum()!
 			}
 			'service' {
-				return error('line ${t.line}: service definitions are not supported')
+				// services are gRPC-only; ignore them like protoc does
+				p.next()
+				p.expect_ident()!
+				p.expect_punct('{')!
+				mut depth := 1
+				for depth > 0 {
+					t2 := p.next()
+					if t2.kind == .eof {
+						return error('line ${t2.line}: unexpected EOF in service')
+					}
+					if t2.kind == .punct && t2.lit == '{' {
+						depth++
+					}
+					if t2.kind == .punct && t2.lit == '}' {
+						depth--
+					}
+				}
 			}
 			else {
 				return error('line ${t.line}: unexpected `${t.lit}`')
