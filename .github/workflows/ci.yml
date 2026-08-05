@@ -49,3 +49,7 @@ jobs:
 
       - name: Build example
         run: v examples/addressbook
+
+      # keep the release-time benchmark harness from rotting
+      - name: Build bench harness
+        run: v -o /tmp/pbbench-v bench/v

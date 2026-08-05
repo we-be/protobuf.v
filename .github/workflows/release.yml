@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: # dry run: builds everything, skips the release step
+
+permissions:
+  contents: write
+
+jobs:
+  vpbgen:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+          - os: macos-latest
+            target: macos-arm64
+          - os: macos-15-intel
+            target: macos-amd64
+    runs-on: ${{ matrix.os }}
+    # setup-v drops the whole V toolchain into the workspace root — keep
+    # our tree in a subdir (same as ci.yml)
+    defaults:
+      run:
+        working-directory: repo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Setup V
+        uses: vlang/setup-v@v1
+        with:
+          check-latest: true
+
+      - name: Build vpbgen
+        run: v -prod -o vpbgen-${{ matrix.target }} cmd/vpbgen
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vpbgen-${{ matrix.target }}
+          path: repo/vpbgen-${{ matrix.target }}
+
+  bench:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: repo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Setup V
+        uses: vlang/setup-v@v1
+        with:
+          check-latest: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Link module into vmodules
+        run: |
+          mkdir -p ~/.vmodules
+          ln -s "$PWD" ~/.vmodules/protobuf
+
+      - name: Run benchmarks
+        run: ./bench/run.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: repo/bench/bench-results.md
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [vpbgen, bench]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          {
+            echo "## vpbgen"
+            echo
+            echo 'Prebuilt `vpbgen` binaries attached (linux-amd64, macos-arm64, macos-amd64).'
+            echo 'The library itself installs from source: `v install --git https://github.com/we-be/protobuf.v`'
+            echo
+            cat dist/bench-results.md
+            echo
+            echo "_Benchmarks ran on a shared CI runner — good for V-vs-Go ratios, noisy for absolute numbers._"
+          } > notes.md
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/vpbgen-* dist/bench-results.md -R "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$tag" -R "$GITHUB_REPOSITORY" --notes-file notes.md
+          else
+            gh release create "$tag" dist/vpbgen-* dist/bench-results.md \
+              -R "$GITHUB_REPOSITORY" --verify-tag --title "$tag" --notes-file notes.md
+          fi

@@ -6,3 +6,6 @@ main
 harness
 interop/out/
 addressbook.bin
+bench/v/pbbench*
+bench/go/pbbench*
+bench/bench-results.md

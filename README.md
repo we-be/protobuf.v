@@ -99,6 +99,20 @@ interop/run.sh          # 300 messages, seed 42
 interop/run.sh 1000 7   # more messages, different seed
 ```
 
+## Benchmarks
+
+[bench/](bench) holds paired V and Go harnesses over the same schema — identical deterministic data, identical timing methodology — measuring against `google.golang.org/protobuf` and verifying both implementations produce byte-identical encodings. `bench/run.sh` writes a full report; CI attaches a fresh one to every release.
+
+From a local run (Go 1.26, protobuf-go v1.36.11, V `-prod`; V/Go time, lower = V faster):
+
+| payload | encode | decode |
+|---|---|---|
+| 77 B | 0.81 | 0.64 |
+| 10 KB | 2.58 | 0.76 |
+| 1 MB | 254 ⚠️ | 0.83 |
+
+Decode beats Go across the board; small/medium encode is competitive. Large-message encode currently hits Boehm GC thrashing (the code path itself is linear — 12 ms with GC off vs Go's 5 ms). Fix planned: generated `encoded_size()` + single-pass encoding into one exactly-sized buffer.
+
 ## Example
 
 [examples/addressbook](examples/addressbook) — the classic protobuf tutorial app as a V CLI. Its data file is a real `tutorial.AddressBook`:
