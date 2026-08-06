@@ -4,8 +4,9 @@ import math
 
 // Encoder builds a message via append-only writes. Field helpers write
 // tag + value unconditionally; proto3 zero-elision is the caller's policy.
-// Sub-messages and packed repeated fields are pre-encoded buffers passed
-// to write_message_field / write_bytes_field — no length backpatching.
+// No length backpatching: length prefixes are known up front — generated
+// code sizes sub-messages via encoded_size(), hand-written code passes
+// pre-encoded buffers to write_message_field / write_bytes_field.
 pub struct Encoder {
 pub mut:
 	buf []u8
@@ -88,7 +89,9 @@ pub fn (mut e Encoder) write_bool_field(field u32, v bool) {
 
 pub fn (mut e Encoder) write_string_field(field u32, s string) {
 	e.write_tag(field, .len_delim)
-	e.write_len_prefixed(s.bytes())
+	e.write_varint(u64(s.len))
+	// append straight from the string's storage — s.bytes() would clone
+	unsafe { e.buf.push_many(s.str, s.len) }
 }
 
 pub fn (mut e Encoder) write_bytes_field(field u32, b []u8) {

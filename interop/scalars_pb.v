@@ -16,14 +16,31 @@ pub mut:
 	num  int
 }
 
-pub fn (m Nested) encode() []u8 {
-	mut e := protobuf.Encoder{}
+pub fn (m &Nested) encoded_size() int {
+	mut n := 0
+	if m.name != '' {
+		n += protobuf.len_field_len(1, m.name.len)
+	}
+	if m.num != 0 {
+		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.num)))
+	}
+	return n
+}
+
+pub fn (m &Nested) encode_to(mut e protobuf.Encoder) {
 	if m.name != '' {
 		e.write_string_field(1, m.name)
 	}
 	if m.num != 0 {
 		e.write_int32_field(2, m.num)
 	}
+}
+
+pub fn (m &Nested) encode() []u8 {
+	mut e := protobuf.Encoder{
+		buf: []u8{cap: m.encoded_size()}
+	}
+	m.encode_to(mut e)
 	return e.buf
 }
 
@@ -73,8 +90,76 @@ pub mut:
 	rn     []Nested
 }
 
-pub fn (m Scalars) encode() []u8 {
-	mut e := protobuf.Encoder{}
+pub fn (m &Scalars) encoded_size() int {
+	mut n := 0
+	if m.a != 0 {
+		n += protobuf.tag_len(1) + protobuf.varint_len(u64(i64(m.a)))
+	}
+	if m.b != 0 {
+		n += protobuf.tag_len(2) + protobuf.varint_len(u64(m.b))
+	}
+	if m.c != 0 {
+		n += protobuf.tag_len(3) + protobuf.varint_len(u64(m.c))
+	}
+	if m.d != 0 {
+		n += protobuf.tag_len(4) + protobuf.varint_len(m.d)
+	}
+	if m.e != 0 {
+		n += protobuf.tag_len(5) + protobuf.varint_len(protobuf.zigzag_encode(i64(m.e)))
+	}
+	if m.f != 0 {
+		n += protobuf.tag_len(6) + protobuf.varint_len(protobuf.zigzag_encode(m.f))
+	}
+	if m.g {
+		n += protobuf.tag_len(7) + 1
+	}
+	if m.h != '' {
+		n += protobuf.len_field_len(8, m.h.len)
+	}
+	if m.i.len > 0 {
+		n += protobuf.len_field_len(9, m.i.len)
+	}
+	if m.j != 0 {
+		n += protobuf.tag_len(10) + 4
+	}
+	if m.k != 0 {
+		n += protobuf.tag_len(11) + 8
+	}
+	if m.l != 0 {
+		n += protobuf.tag_len(12) + 4
+	}
+	if m.m != 0 {
+		n += protobuf.tag_len(13) + 8
+	}
+	if m.n != 0 {
+		n += protobuf.tag_len(14) + 4
+	}
+	if m.o != 0 {
+		n += protobuf.tag_len(15) + 8
+	}
+	if int(m.p) != 0 {
+		n += protobuf.tag_len(16) + protobuf.varint_len(u64(i64(int(m.p))))
+	}
+	if m.rp.len > 0 {
+		mut p := 0
+		for v in m.rp {
+			p += protobuf.varint_len(u64(i64(v)))
+		}
+		n += protobuf.len_field_len(17, p)
+	}
+	for v in m.rs {
+		n += protobuf.len_field_len(18, v.len)
+	}
+	if nested := m.nested {
+		n += protobuf.len_field_len(19, nested.encoded_size())
+	}
+	for v in m.rn {
+		n += protobuf.len_field_len(20, v.encoded_size())
+	}
+	return n
+}
+
+pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 	if m.a != 0 {
 		e.write_int32_field(1, m.a)
 	}
@@ -124,21 +209,36 @@ pub fn (m Scalars) encode() []u8 {
 		e.write_int32_field(16, int(m.p))
 	}
 	if m.rp.len > 0 {
-		mut sub := protobuf.Encoder{}
+		mut p := 0
 		for v in m.rp {
-			sub.write_varint(u64(i64(v)))
+			p += protobuf.varint_len(u64(i64(v)))
 		}
-		e.write_bytes_field(17, sub.buf)
+		e.write_tag(17, .len_delim)
+		e.write_varint(u64(p))
+		for v in m.rp {
+			e.write_varint(u64(i64(v)))
+		}
 	}
 	for v in m.rs {
 		e.write_string_field(18, v)
 	}
 	if nested := m.nested {
-		e.write_message_field(19, nested.encode())
+		e.write_tag(19, .len_delim)
+		e.write_varint(u64(nested.encoded_size()))
+		nested.encode_to(mut e)
 	}
 	for v in m.rn {
-		e.write_message_field(20, v.encode())
+		e.write_tag(20, .len_delim)
+		e.write_varint(u64(v.encoded_size()))
+		v.encode_to(mut e)
 	}
+}
+
+pub fn (m &Scalars) encode() []u8 {
+	mut e := protobuf.Encoder{
+		buf: []u8{cap: m.encoded_size()}
+	}
+	m.encode_to(mut e)
 	return e.buf
 }
 

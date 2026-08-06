@@ -3,8 +3,10 @@ module gen
 import strings
 
 // V code generator for parsed proto3 files. Emits one V source file with
-// structs, enums, encode() methods and static decode() functions in the
-// same shape as hand-written wire code.
+// structs, enums, encoded_size()/encode_to()/encode() methods and static
+// decode() functions. Encoding is single-pass: encoded_size() computes the
+// exact wire size, encode() allocates once, and encode_to() writes into
+// the shared buffer — no per-submessage temporaries (GC-friendly).
 //
 // Mapping decisions:
 // - nested types are flattened: Person.PhoneNumber -> Person_PhoneNumber
@@ -92,20 +94,62 @@ fn scalar_reader(t string) string {
 
 fn packed_write_stmt(t string, v string) string {
 	return match t {
-		'int32' { 'sub.write_varint(u64(i64(${v})))' }
-		'int64' { 'sub.write_varint(u64(${v}))' }
-		'uint32' { 'sub.write_varint(u64(${v}))' }
-		'uint64' { 'sub.write_varint(${v})' }
-		'sint32' { 'sub.write_varint(protobuf.zigzag_encode(i64(${v})))' }
-		'sint64' { 'sub.write_varint(protobuf.zigzag_encode(${v}))' }
-		'bool' { 'sub.write_varint(if ${v} { u64(1) } else { u64(0) })' }
-		'fixed32' { 'sub.write_fixed32(${v})' }
-		'sfixed32' { 'sub.write_fixed32(u32(${v}))' }
-		'float' { 'sub.write_f32(${v})' }
-		'fixed64' { 'sub.write_fixed64(${v})' }
-		'sfixed64' { 'sub.write_fixed64(u64(${v}))' }
-		'double' { 'sub.write_f64(${v})' }
+		'int32' { 'e.write_varint(u64(i64(${v})))' }
+		'int64' { 'e.write_varint(u64(${v}))' }
+		'uint32' { 'e.write_varint(u64(${v}))' }
+		'uint64' { 'e.write_varint(${v})' }
+		'sint32' { 'e.write_varint(protobuf.zigzag_encode(i64(${v})))' }
+		'sint64' { 'e.write_varint(protobuf.zigzag_encode(${v}))' }
+		'bool' { 'e.write_varint(if ${v} { u64(1) } else { u64(0) })' }
+		'fixed32' { 'e.write_fixed32(${v})' }
+		'sfixed32' { 'e.write_fixed32(u32(${v}))' }
+		'float' { 'e.write_f32(${v})' }
+		'fixed64' { 'e.write_fixed64(${v})' }
+		'sfixed64' { 'e.write_fixed64(u64(${v}))' }
+		'double' { 'e.write_f64(${v})' }
 		else { '' }
+	}
+}
+
+// exact wire size of one tagged scalar field, mirroring the tagged writers
+fn scalar_size_expr(t string, fnum int, v string) string {
+	return match t {
+		'int32' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(u64(i64(${v})))' }
+		'int64' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(u64(${v}))' }
+		'uint32' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(u64(${v}))' }
+		'uint64' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(${v})' }
+		'sint32' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(protobuf.zigzag_encode(i64(${v})))' }
+		'sint64' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(protobuf.zigzag_encode(${v}))' }
+		'bool' { 'protobuf.tag_len(${fnum}) + 1' }
+		'string' { 'protobuf.len_field_len(${fnum}, ${v}.len)' }
+		'bytes' { 'protobuf.len_field_len(${fnum}, ${v}.len)' }
+		'float', 'fixed32', 'sfixed32' { 'protobuf.tag_len(${fnum}) + 4' }
+		'double', 'fixed64', 'sfixed64' { 'protobuf.tag_len(${fnum}) + 8' }
+		else { '' }
+	}
+}
+
+// size of one untagged packed element for varint-class types; fixed-width
+// types are handled arithmetically via packed_elem_width
+fn packed_elem_size_expr(t string, v string) string {
+	return match t {
+		'int32' { 'protobuf.varint_len(u64(i64(${v})))' }
+		'int64' { 'protobuf.varint_len(u64(${v}))' }
+		'uint32' { 'protobuf.varint_len(u64(${v}))' }
+		'uint64' { 'protobuf.varint_len(${v})' }
+		'sint32' { 'protobuf.varint_len(protobuf.zigzag_encode(i64(${v})))' }
+		'sint64' { 'protobuf.varint_len(protobuf.zigzag_encode(${v}))' }
+		else { '' }
+	}
+}
+
+// bytes per packed element when constant, 0 for varint-class types
+fn packed_elem_width(t string) int {
+	return match t {
+		'bool' { 1 }
+		'float', 'fixed32', 'sfixed32' { 4 }
+		'double', 'fixed64', 'sfixed64' { 8 }
+		else { 0 }
 	}
 }
 
@@ -349,11 +393,31 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 	fields.sort(a.number < b.number)
 
 	b.writeln('')
-	b.writeln('pub fn (m ${vname}) encode() []u8 {')
-	b.writeln('\tmut e := protobuf.Encoder{}')
+	b.writeln('pub fn (m &${vname}) encoded_size() int {')
+	if fields.len == 0 {
+		b.writeln('\treturn 0')
+	} else {
+		b.writeln('\tmut n := 0')
+		for fld in fields {
+			g.emit_size_field(mut b, scope, vname, fld)!
+		}
+		b.writeln('\treturn n')
+	}
+	b.writeln('}')
+
+	b.writeln('')
+	b.writeln('pub fn (m &${vname}) encode_to(mut e protobuf.Encoder) {')
 	for fld in fields {
 		g.emit_encode_field(mut b, scope, vname, fld)!
 	}
+	b.writeln('}')
+
+	b.writeln('')
+	b.writeln('pub fn (m &${vname}) encode() []u8 {')
+	b.writeln('\tmut e := protobuf.Encoder{')
+	b.writeln('\t\tbuf: []u8{cap: m.encoded_size()}')
+	b.writeln('\t}')
+	b.writeln('\tm.encode_to(mut e)')
 	b.writeln('\treturn e.buf')
 	b.writeln('}')
 
@@ -389,7 +453,9 @@ fn (mut g Gen) emit_encode_field(mut b strings.Builder, scope []string, vname st
 	if fld.label == .repeated {
 		if info.kind == .message {
 			b.writeln('\tfor v in m.${name} {')
-			b.writeln('\t\te.write_message_field(${n}, v.encode())')
+			b.writeln('\t\te.write_tag(${n}, .len_delim)')
+			b.writeln('\t\te.write_varint(u64(v.encoded_size()))')
+			b.writeln('\t\tv.encode_to(mut e)')
 			b.writeln('\t}')
 			return
 		}
@@ -397,11 +463,15 @@ fn (mut g Gen) emit_encode_field(mut b strings.Builder, scope []string, vname st
 		if info.kind == .enum_ {
 			if packed {
 				b.writeln('\tif m.${name}.len > 0 {')
-				b.writeln('\t\tmut sub := protobuf.Encoder{}')
+				b.writeln('\t\tmut p := 0')
 				b.writeln('\t\tfor v in m.${name} {')
-				b.writeln('\t\t\tsub.write_varint(u64(i64(int(v))))')
+				b.writeln('\t\t\tp += protobuf.varint_len(u64(i64(int(v))))')
 				b.writeln('\t\t}')
-				b.writeln('\t\te.write_bytes_field(${n}, sub.buf)')
+				b.writeln('\t\te.write_tag(${n}, .len_delim)')
+				b.writeln('\t\te.write_varint(u64(p))')
+				b.writeln('\t\tfor v in m.${name} {')
+				b.writeln('\t\t\te.write_varint(u64(i64(int(v))))')
+				b.writeln('\t\t}')
 				b.writeln('\t}')
 			} else {
 				b.writeln('\tfor v in m.${name} {')
@@ -412,12 +482,23 @@ fn (mut g Gen) emit_encode_field(mut b strings.Builder, scope []string, vname st
 		}
 		// scalar
 		if is_packable(fld.typ) && packed {
+			w := packed_elem_width(fld.typ)
 			b.writeln('\tif m.${name}.len > 0 {')
-			b.writeln('\t\tmut sub := protobuf.Encoder{}')
+			if w > 0 {
+				mult := if w == 1 { 'm.${name}.len' } else { 'm.${name}.len * ${w}' }
+				b.writeln('\t\te.write_tag(${n}, .len_delim)')
+				b.writeln('\t\te.write_varint(u64(${mult}))')
+			} else {
+				b.writeln('\t\tmut p := 0')
+				b.writeln('\t\tfor v in m.${name} {')
+				b.writeln('\t\t\tp += ${packed_elem_size_expr(fld.typ, 'v')}')
+				b.writeln('\t\t}')
+				b.writeln('\t\te.write_tag(${n}, .len_delim)')
+				b.writeln('\t\te.write_varint(u64(p))')
+			}
 			b.writeln('\t\tfor v in m.${name} {')
 			b.writeln('\t\t\t${packed_write_stmt(fld.typ, 'v')}')
 			b.writeln('\t\t}')
-			b.writeln('\t\te.write_bytes_field(${n}, sub.buf)')
 			b.writeln('\t}')
 		} else {
 			b.writeln('\tfor v in m.${name} {')
@@ -429,7 +510,9 @@ fn (mut g Gen) emit_encode_field(mut b strings.Builder, scope []string, vname st
 	match info.kind {
 		.message {
 			b.writeln('\tif ${name} := m.${name} {')
-			b.writeln('\t\te.write_message_field(${n}, ${name}.encode())')
+			b.writeln('\t\te.write_tag(${n}, .len_delim)')
+			b.writeln('\t\te.write_varint(u64(${name}.encoded_size()))')
+			b.writeln('\t\t${name}.encode_to(mut e)')
 			b.writeln('\t}')
 		}
 		.enum_ {
@@ -451,6 +534,90 @@ fn (mut g Gen) emit_encode_field(mut b strings.Builder, scope []string, vname st
 			} else {
 				b.writeln('\tif ${zero_check(fld.typ, 'm.${name}')} {')
 				b.writeln('\t\te.${tagged_writer(fld.typ)}(${n}, m.${name})')
+				b.writeln('\t}')
+			}
+		}
+	}
+}
+
+// mirrors emit_encode_field exactly — every condition here must match the
+// write path or the presized buffer will be wrong
+fn (mut g Gen) emit_size_field(mut b strings.Builder, scope []string, vname string, fld Field) ! {
+	info := g.field_info(scope, vname, fld)!
+	name := sanitize(fld.name)
+	n := fld.number
+	if fld.label == .repeated {
+		if info.kind == .message {
+			b.writeln('\tfor v in m.${name} {')
+			b.writeln('\t\tn += protobuf.len_field_len(${n}, v.encoded_size())')
+			b.writeln('\t}')
+			return
+		}
+		packed := if fld.has_packed { fld.packed } else { true }
+		if info.kind == .enum_ {
+			if packed {
+				b.writeln('\tif m.${name}.len > 0 {')
+				b.writeln('\t\tmut p := 0')
+				b.writeln('\t\tfor v in m.${name} {')
+				b.writeln('\t\t\tp += protobuf.varint_len(u64(i64(int(v))))')
+				b.writeln('\t\t}')
+				b.writeln('\t\tn += protobuf.len_field_len(${n}, p)')
+				b.writeln('\t}')
+			} else {
+				b.writeln('\tfor v in m.${name} {')
+				b.writeln('\t\tn += protobuf.tag_len(${n}) + protobuf.varint_len(u64(i64(int(v))))')
+				b.writeln('\t}')
+			}
+			return
+		}
+		if is_packable(fld.typ) && packed {
+			w := packed_elem_width(fld.typ)
+			if w > 0 {
+				mult := if w == 1 { 'm.${name}.len' } else { 'm.${name}.len * ${w}' }
+				b.writeln('\tif m.${name}.len > 0 {')
+				b.writeln('\t\tn += protobuf.len_field_len(${n}, ${mult})')
+				b.writeln('\t}')
+			} else {
+				b.writeln('\tif m.${name}.len > 0 {')
+				b.writeln('\t\tmut p := 0')
+				b.writeln('\t\tfor v in m.${name} {')
+				b.writeln('\t\t\tp += ${packed_elem_size_expr(fld.typ, 'v')}')
+				b.writeln('\t\t}')
+				b.writeln('\t\tn += protobuf.len_field_len(${n}, p)')
+				b.writeln('\t}')
+			}
+		} else {
+			b.writeln('\tfor v in m.${name} {')
+			b.writeln('\t\tn += ${scalar_size_expr(fld.typ, n, 'v')}')
+			b.writeln('\t}')
+		}
+		return
+	}
+	match info.kind {
+		.message {
+			b.writeln('\tif ${name} := m.${name} {')
+			b.writeln('\t\tn += protobuf.len_field_len(${n}, ${name}.encoded_size())')
+			b.writeln('\t}')
+		}
+		.enum_ {
+			if fld.label == .optional {
+				b.writeln('\tif ${name} := m.${name} {')
+				b.writeln('\t\tn += protobuf.tag_len(${n}) + protobuf.varint_len(u64(i64(int(${name}))))')
+				b.writeln('\t}')
+			} else {
+				b.writeln('\tif int(m.${name}) != 0 {')
+				b.writeln('\t\tn += protobuf.tag_len(${n}) + protobuf.varint_len(u64(i64(int(m.${name}))))')
+				b.writeln('\t}')
+			}
+		}
+		.scalar {
+			if fld.label == .optional {
+				b.writeln('\tif ${name} := m.${name} {')
+				b.writeln('\t\tn += ${scalar_size_expr(fld.typ, n, name)}')
+				b.writeln('\t}')
+			} else {
+				b.writeln('\tif ${zero_check(fld.typ, 'm.${name}')} {')
+				b.writeln('\t\tn += ${scalar_size_expr(fld.typ, n, 'm.${name}')}')
 				b.writeln('\t}')
 			}
 		}

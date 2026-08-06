@@ -16,14 +16,31 @@ pub mut:
 	type_  PhoneType
 }
 
-pub fn (m PhoneNumber) encode() []u8 {
-	mut e := protobuf.Encoder{}
+pub fn (m &PhoneNumber) encoded_size() int {
+	mut n := 0
+	if m.number != '' {
+		n += protobuf.len_field_len(1, m.number.len)
+	}
+	if int(m.type_) != 0 {
+		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(m.type_))))
+	}
+	return n
+}
+
+pub fn (m &PhoneNumber) encode_to(mut e protobuf.Encoder) {
 	if m.number != '' {
 		e.write_string_field(1, m.number)
 	}
 	if int(m.type_) != 0 {
 		e.write_int32_field(2, int(m.type_))
 	}
+}
+
+pub fn (m &PhoneNumber) encode() []u8 {
+	mut e := protobuf.Encoder{
+		buf: []u8{cap: m.encoded_size()}
+	}
+	m.encode_to(mut e)
 	return e.buf
 }
 
@@ -61,8 +78,40 @@ pub mut:
 	tags      []i64
 }
 
-pub fn (m Person) encode() []u8 {
-	mut e := protobuf.Encoder{}
+pub fn (m &Person) encoded_size() int {
+	mut n := 0
+	if m.name != '' {
+		n += protobuf.len_field_len(1, m.name.len)
+	}
+	if m.id != 0 {
+		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.id)))
+	}
+	if m.email != '' {
+		n += protobuf.len_field_len(3, m.email.len)
+	}
+	for v in m.phones {
+		n += protobuf.len_field_len(4, v.encoded_size())
+	}
+	if m.active {
+		n += protobuf.tag_len(5) + 1
+	}
+	if m.score != 0 {
+		n += protobuf.tag_len(6) + 8
+	}
+	if m.last_seen != 0 {
+		n += protobuf.tag_len(7) + protobuf.varint_len(m.last_seen)
+	}
+	if m.tags.len > 0 {
+		mut p := 0
+		for v in m.tags {
+			p += protobuf.varint_len(u64(v))
+		}
+		n += protobuf.len_field_len(8, p)
+	}
+	return n
+}
+
+pub fn (m &Person) encode_to(mut e protobuf.Encoder) {
 	if m.name != '' {
 		e.write_string_field(1, m.name)
 	}
@@ -73,7 +122,9 @@ pub fn (m Person) encode() []u8 {
 		e.write_string_field(3, m.email)
 	}
 	for v in m.phones {
-		e.write_message_field(4, v.encode())
+		e.write_tag(4, .len_delim)
+		e.write_varint(u64(v.encoded_size()))
+		v.encode_to(mut e)
 	}
 	if m.active {
 		e.write_bool_field(5, m.active)
@@ -85,12 +136,23 @@ pub fn (m Person) encode() []u8 {
 		e.write_uint64_field(7, m.last_seen)
 	}
 	if m.tags.len > 0 {
-		mut sub := protobuf.Encoder{}
+		mut p := 0
 		for v in m.tags {
-			sub.write_varint(u64(v))
+			p += protobuf.varint_len(u64(v))
 		}
-		e.write_bytes_field(8, sub.buf)
+		e.write_tag(8, .len_delim)
+		e.write_varint(u64(p))
+		for v in m.tags {
+			e.write_varint(u64(v))
+		}
 	}
+}
+
+pub fn (m &Person) encode() []u8 {
+	mut e := protobuf.Encoder{
+		buf: []u8{cap: m.encoded_size()}
+	}
+	m.encode_to(mut e)
 	return e.buf
 }
 
@@ -148,11 +210,27 @@ pub mut:
 	people []Person
 }
 
-pub fn (m AddressBook) encode() []u8 {
-	mut e := protobuf.Encoder{}
+pub fn (m &AddressBook) encoded_size() int {
+	mut n := 0
 	for v in m.people {
-		e.write_message_field(1, v.encode())
+		n += protobuf.len_field_len(1, v.encoded_size())
 	}
+	return n
+}
+
+pub fn (m &AddressBook) encode_to(mut e protobuf.Encoder) {
+	for v in m.people {
+		e.write_tag(1, .len_delim)
+		e.write_varint(u64(v.encoded_size()))
+		v.encode_to(mut e)
+	}
+}
+
+pub fn (m &AddressBook) encode() []u8 {
+	mut e := protobuf.Encoder{
+		buf: []u8{cap: m.encoded_size()}
+	}
+	m.encode_to(mut e)
 	return e.buf
 }
 

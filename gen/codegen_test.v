@@ -78,7 +78,7 @@ fn test_generate_structure() ! {
 	assert code.contains('person_kind_admin = 2')
 	assert code.contains('pub struct Person {')
 	assert code.contains('pub struct Person_Address {')
-	assert code.contains('pub fn (m Person) encode() []u8 {')
+	assert code.contains('pub fn (m &Person) encode() []u8 {')
 	assert code.contains('pub fn Person.decode(buf []u8) !Person {')
 	assert code.contains('opt_rank ?int')
 	assert code.contains('home ?Person_Address')

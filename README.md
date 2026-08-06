@@ -80,7 +80,7 @@ fn Person.decode(buf []u8) !Person {
 ## Design
 
 - **Policy-free wire layer.** Field helpers write tag + value unconditionally; proto3 zero-elision is the generated code's decision, not the runtime's.
-- **No length backpatching.** Sub-messages and packed repeated fields are encoded into their own buffer, then embedded with `write_message_field` / `write_bytes_field`.
+- **Single-pass encoding, no length backpatching.** Generated `encoded_size()` computes the exact wire size, `encode()` allocates one right-sized buffer, and `encode_to()` writes everything in a single pass — no per-submessage temporaries. Generated methods take `&` receivers, which sidesteps a V codegen pathology where loops over by-value receivers emit a per-iteration GC-keepalive walk of the whole struct (quadratic on large repeated fields). Hand-written wire code can still embed pre-encoded buffers via `write_message_field` / `write_bytes_field`.
 - **Defensive decoding.** Truncated varints, overlong varints (>10 bytes), field number 0, deprecated group wire types, and length prefixes past the end of the buffer are all errors, never panics.
 - **Copies, not views.** `read_bytes` clones, so decoded messages never alias the input buffer.
 
@@ -107,11 +107,11 @@ From a local run (Go 1.26, protobuf-go v1.36.11, V `-prod`; V/Go time, lower = V
 
 | payload | encode | decode |
 |---|---|---|
-| 77 B | 0.81 | 0.64 |
-| 10 KB | 2.58 | 0.76 |
-| 1 MB | 254 ⚠️ | 0.83 |
+| 77 B | 0.49 | 0.69 |
+| 10 KB | 0.74 | 0.90 |
+| 1 MB | 0.75 | 1.03 |
 
-Decode beats Go across the board; small/medium encode is competitive. Large-message encode currently hits Boehm GC thrashing (the code path itself is linear — 12 ms with GC off vs Go's 5 ms). Fix planned: generated `encoded_size()` + single-pass encoding into one exactly-sized buffer.
+Encode beats Go at every size; decode sits at parity or better. This relies on the single-pass `encoded_size()`/`encode_to()` design plus `&` receivers on generated methods (see Design) — an earlier draft with by-value receivers and per-submessage buffers was 243× slower than Go on the 1 MB encode.
 
 ## Example
 
