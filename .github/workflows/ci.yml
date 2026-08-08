@@ -11,13 +11,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        v: [master, stable]
     runs-on: ${{ matrix.os }}
-    # V tags releases months apart, so master is where our users are and is
-    # the blocking signal. The stable leg is advisory: it tells us a release
-    # install can still build us, but it also goes red for compiler bugs
-    # already fixed upstream, which are not ours to fix.
-    continue-on-error: ${{ matrix.v == 'stable' }}
+    # master only. A stable-release leg is worth having, but V 0.5.2 cannot
+    # bootstrap on current runners (duplicate C.open decl in vlib/os), so it
+    # is red on every OS regardless of our code — restore it once a release
+    # builds again.
     # setup-v drops the whole V toolchain into the workspace root, and
     # v fmt/test recurse — keep our tree in a subdir so they never meet
     defaults:
@@ -32,7 +30,6 @@ jobs:
         uses: vlang/setup-v@v1
         with:
           check-latest: true
-          stable: ${{ matrix.v == 'stable' }}
 
       # a tarball install has no .git, so this prints a bare version with no
       # commit — check the setup-v step's download URL to identify the build
