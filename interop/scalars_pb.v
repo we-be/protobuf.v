@@ -13,8 +13,9 @@ pub enum Color {
 
 pub struct Nested {
 pub mut:
-	name string
-	num  int
+	name       string
+	num        int
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &Nested) encoded_size() int {
@@ -25,7 +26,7 @@ pub fn (m &Nested) encoded_size() int {
 	if m.num != 0 {
 		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.num)))
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &Nested) encode_to(mut e protobuf.Encoder) {
@@ -35,6 +36,7 @@ pub fn (m &Nested) encode_to(mut e protobuf.Encoder) {
 	if m.num != 0 {
 		e.write_int32_field(2, m.num)
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &Nested) encode() []u8 {
@@ -51,6 +53,7 @@ pub fn Nested.decode(buf []u8) !Nested {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
@@ -61,6 +64,7 @@ pub fn Nested.decode(buf []u8) !Nested {
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}
@@ -86,33 +90,34 @@ pub type Scalars_Choice = Scalars_Ci | Scalars_Cs | Scalars_Cn
 
 pub struct Scalars {
 pub mut:
-	a      int
-	b      i64
-	c      u32
-	d      u64
-	e      int
-	f      i64
-	g      bool
-	h      string
-	i      []u8
-	j      f32
-	k      f64
-	l      u32
-	m      u64
-	n      int
-	o      i64
-	p      Color
-	rp     []int
-	rs     []string
-	nested ?Nested
-	rn     []Nested
-	mi     map[int]int
-	ms     map[string]string
-	mn     map[string]Nested
-	mc     map[u32]Color
-	mb     map[i64]bool
-	choice ?Scalars_Choice
-	ts     ?GoogleProtobuf_Timestamp
+	a          int
+	b          i64
+	c          u32
+	d          u64
+	e          int
+	f          i64
+	g          bool
+	h          string
+	i          []u8
+	j          f32
+	k          f64
+	l          u32
+	m          u64
+	n          int
+	o          i64
+	p          Color
+	rp         []int
+	rs         []string
+	nested     ?Nested
+	rn         []Nested
+	mi         map[int]int
+	ms         map[string]string
+	mn         map[string]Nested
+	mc         map[u32]Color
+	mb         map[i64]bool
+	choice     ?Scalars_Choice
+	ts         ?GoogleProtobuf_Timestamp
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &Scalars) encoded_size() int {
@@ -219,7 +224,7 @@ pub fn (m &Scalars) encoded_size() int {
 	if ts := m.ts {
 		n += protobuf.len_field_len(29, ts.encoded_size())
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
@@ -378,6 +383,7 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 		e.write_varint(u64(ts.encoded_size()))
 		ts.encode_to(mut e)
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &Scalars) encode() []u8 {
@@ -394,6 +400,7 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
@@ -565,6 +572,7 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}
@@ -573,8 +581,9 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 
 pub struct GoogleProtobuf_Timestamp {
 pub mut:
-	seconds i64
-	nanos   int
+	seconds    i64
+	nanos      int
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &GoogleProtobuf_Timestamp) encoded_size() int {
@@ -585,7 +594,7 @@ pub fn (m &GoogleProtobuf_Timestamp) encoded_size() int {
 	if m.nanos != 0 {
 		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.nanos)))
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &GoogleProtobuf_Timestamp) encode_to(mut e protobuf.Encoder) {
@@ -595,6 +604,7 @@ pub fn (m &GoogleProtobuf_Timestamp) encode_to(mut e protobuf.Encoder) {
 	if m.nanos != 0 {
 		e.write_int32_field(2, m.nanos)
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &GoogleProtobuf_Timestamp) encode() []u8 {
@@ -611,6 +621,7 @@ pub fn GoogleProtobuf_Timestamp.decode(buf []u8) !GoogleProtobuf_Timestamp {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
@@ -621,6 +632,7 @@ pub fn GoogleProtobuf_Timestamp.decode(buf []u8) !GoogleProtobuf_Timestamp {
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}

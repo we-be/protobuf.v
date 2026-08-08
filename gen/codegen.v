@@ -21,6 +21,10 @@ import strings
 // - a oneof becomes ?SumType over one wrapper struct per arm (arms can
 //   share an underlying type, so bare unions won't do); arms have explicit
 //   presence — a set arm encodes even at its zero value, like protoc
+// - unknown fields are preserved: every struct carries pb_unknown []u8
+//   (raw wire bytes, arrival order) re-emitted after known fields, so a
+//   decode/encode roundtrip through an older schema loses nothing. Note
+//   V's == therefore treats unknowns as part of the value
 // - recursion through singular message fields is rejected (a ?T field
 //   stores its value inline in V, so the type would be infinitely sized)
 
@@ -511,35 +515,37 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 		b.writeln('pub type ${vname}_${camel(o.name)} = ' + arm_types.join(' | '))
 	}
 
+	for fld in m.fields {
+		if sanitize(fld.name) == 'pb_unknown' || sanitize(fld.oneof) == 'pb_unknown' {
+			return error('message ${m.name}: field name `pb_unknown` is reserved for unknown-field preservation')
+		}
+	}
 	b.writeln('')
-	if m.fields.len == 0 {
-		b.writeln('pub struct ${vname} {}')
-	} else {
-		b.writeln('pub struct ${vname} {')
-		b.writeln('pub mut:')
-		mut seen_oneofs := map[string]bool{}
-		for fld in m.fields {
-			if fld.oneof != '' {
-				if fld.oneof in seen_oneofs {
-					continue
-				}
-				seen_oneofs[fld.oneof] = true
-				b.writeln('\t${sanitize(fld.oneof)} ?${vname}_${camel(fld.oneof)}')
+	b.writeln('pub struct ${vname} {')
+	b.writeln('pub mut:')
+	mut seen_oneofs := map[string]bool{}
+	for fld in m.fields {
+		if fld.oneof != '' {
+			if fld.oneof in seen_oneofs {
 				continue
 			}
-			info := g.field_info(scope, vname, fld)!
-			mut t := info.vtype
-			if fld.is_map {
-				t = 'map[${v_scalar_type(fld.key_typ)}]${t}'
-			} else if fld.label == .repeated {
-				t = '[]${t}'
-			} else if fld.label == .optional || info.kind == .message {
-				t = '?${t}'
-			}
-			b.writeln('\t${sanitize(fld.name)} ${t}')
+			seen_oneofs[fld.oneof] = true
+			b.writeln('\t${sanitize(fld.oneof)} ?${vname}_${camel(fld.oneof)}')
+			continue
 		}
-		b.writeln('}')
+		info := g.field_info(scope, vname, fld)!
+		mut t := info.vtype
+		if fld.is_map {
+			t = 'map[${v_scalar_type(fld.key_typ)}]${t}'
+		} else if fld.label == .repeated {
+			t = '[]${t}'
+		} else if fld.label == .optional || info.kind == .message {
+			t = '?${t}'
+		}
+		b.writeln('\t${sanitize(fld.name)} ${t}')
 	}
+	b.writeln('\tpb_unknown []u8 // unrecognized fields, re-emitted on encode')
+	b.writeln('}')
 
 	mut fields := m.fields.clone()
 	fields.sort(a.number < b.number)
@@ -547,13 +553,13 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 	b.writeln('')
 	b.writeln('pub fn (m &${vname}) encoded_size() int {')
 	if fields.len == 0 {
-		b.writeln('\treturn 0')
+		b.writeln('\treturn m.pb_unknown.len')
 	} else {
 		b.writeln('\tmut n := 0')
 		for fld in fields {
 			g.emit_size_field(mut b, scope, vname, fld)!
 		}
-		b.writeln('\treturn n')
+		b.writeln('\treturn n + m.pb_unknown.len')
 	}
 	b.writeln('}')
 
@@ -562,6 +568,7 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 	for fld in fields {
 		g.emit_encode_field(mut b, scope, vname, fld)!
 	}
+	b.writeln('\te.write_raw(m.pb_unknown)')
 	b.writeln('}')
 
 	b.writeln('')
@@ -580,15 +587,24 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 	b.writeln('\t\tbuf: buf')
 	b.writeln('\t}')
 	b.writeln('\tfor d.more() {')
-	b.writeln('\t\tfield, wt := d.read_tag()!')
-	b.writeln('\t\tmatch field {')
-	for fld in fields {
-		g.emit_decode_field(mut b, scope, vname, fld)!
+	if fields.len == 0 {
+		b.writeln('\t\ttag_start := d.pos')
+		b.writeln('\t\t_, wt := d.read_tag()!')
+		b.writeln('\t\td.skip(wt)!')
+		b.writeln('\t\tm.pb_unknown << d.buf[tag_start..d.pos]')
+	} else {
+		b.writeln('\t\ttag_start := d.pos')
+		b.writeln('\t\tfield, wt := d.read_tag()!')
+		b.writeln('\t\tmatch field {')
+		for fld in fields {
+			g.emit_decode_field(mut b, scope, vname, fld)!
+		}
+		b.writeln('\t\t\telse {')
+		b.writeln('\t\t\t\td.skip(wt)!')
+		b.writeln('\t\t\t\tm.pb_unknown << d.buf[tag_start..d.pos]')
+		b.writeln('\t\t\t}')
+		b.writeln('\t\t}')
 	}
-	b.writeln('\t\t\telse {')
-	b.writeln('\t\t\t\td.skip(wt)!')
-	b.writeln('\t\t\t}')
-	b.writeln('\t\t}')
 	b.writeln('\t}')
 	b.writeln('\treturn m')
 	b.writeln('}')

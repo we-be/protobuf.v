@@ -37,6 +37,12 @@ pub fn (mut e Encoder) write_fixed64(v u64) {
 	e.write_fixed32(u32(v >> 32))
 }
 
+// write_raw appends already-encoded wire bytes verbatim; generated code
+// uses it to re-emit preserved unknown fields
+pub fn (mut e Encoder) write_raw(b []u8) {
+	e.buf << b
+}
+
 pub fn (mut e Encoder) write_len_prefixed(b []u8) {
 	e.write_varint(u64(b.len))
 	e.buf << b

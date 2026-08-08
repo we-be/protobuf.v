@@ -13,8 +13,9 @@ pub enum PhoneType {
 
 pub struct PhoneNumber {
 pub mut:
-	number string
-	type_  PhoneType
+	number     string
+	type_      PhoneType
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &PhoneNumber) encoded_size() int {
@@ -25,7 +26,7 @@ pub fn (m &PhoneNumber) encoded_size() int {
 	if int(m.type_) != 0 {
 		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(m.type_))))
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &PhoneNumber) encode_to(mut e protobuf.Encoder) {
@@ -35,6 +36,7 @@ pub fn (m &PhoneNumber) encode_to(mut e protobuf.Encoder) {
 	if int(m.type_) != 0 {
 		e.write_int32_field(2, int(m.type_))
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &PhoneNumber) encode() []u8 {
@@ -51,6 +53,7 @@ pub fn PhoneNumber.decode(buf []u8) !PhoneNumber {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
@@ -61,6 +64,7 @@ pub fn PhoneNumber.decode(buf []u8) !PhoneNumber {
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}
@@ -81,18 +85,19 @@ pub type Person_Contact = Person_Handle | Person_Ext
 
 pub struct Person {
 pub mut:
-	name      string
-	id        int
-	email     string
-	phones    []PhoneNumber
-	active    bool
-	score     f64
-	last_seen u64
-	tags      []i64
-	metadata  map[string]string
-	counters  map[int]i64
-	seen_at   ?GoogleProtobuf_Timestamp
-	contact   ?Person_Contact
+	name       string
+	id         int
+	email      string
+	phones     []PhoneNumber
+	active     bool
+	score      f64
+	last_seen  u64
+	tags       []i64
+	metadata   map[string]string
+	counters   map[int]i64
+	seen_at    ?GoogleProtobuf_Timestamp
+	contact    ?Person_Contact
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &Person) encoded_size() int {
@@ -146,7 +151,7 @@ pub fn (m &Person) encoded_size() int {
 			n += protobuf.tag_len(13) + protobuf.varint_len(u64(ov.value))
 		}
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &Person) encode_to(mut e protobuf.Encoder) {
@@ -222,6 +227,7 @@ pub fn (m &Person) encode_to(mut e protobuf.Encoder) {
 			e.write_int64_field(13, ov.value)
 		}
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &Person) encode() []u8 {
@@ -238,6 +244,7 @@ pub fn Person.decode(buf []u8) !Person {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
@@ -320,6 +327,7 @@ pub fn Person.decode(buf []u8) !Person {
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}
@@ -328,7 +336,8 @@ pub fn Person.decode(buf []u8) !Person {
 
 pub struct AddressBook {
 pub mut:
-	people []Person
+	people     []Person
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &AddressBook) encoded_size() int {
@@ -336,7 +345,7 @@ pub fn (m &AddressBook) encoded_size() int {
 	for v in m.people {
 		n += protobuf.len_field_len(1, v.encoded_size())
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &AddressBook) encode_to(mut e protobuf.Encoder) {
@@ -345,6 +354,7 @@ pub fn (m &AddressBook) encode_to(mut e protobuf.Encoder) {
 		e.write_varint(u64(v.encoded_size()))
 		v.encode_to(mut e)
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &AddressBook) encode() []u8 {
@@ -361,6 +371,7 @@ pub fn AddressBook.decode(buf []u8) !AddressBook {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
@@ -368,6 +379,7 @@ pub fn AddressBook.decode(buf []u8) !AddressBook {
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}
@@ -376,8 +388,9 @@ pub fn AddressBook.decode(buf []u8) !AddressBook {
 
 pub struct GoogleProtobuf_Timestamp {
 pub mut:
-	seconds i64
-	nanos   int
+	seconds    i64
+	nanos      int
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &GoogleProtobuf_Timestamp) encoded_size() int {
@@ -388,7 +401,7 @@ pub fn (m &GoogleProtobuf_Timestamp) encoded_size() int {
 	if m.nanos != 0 {
 		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.nanos)))
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &GoogleProtobuf_Timestamp) encode_to(mut e protobuf.Encoder) {
@@ -398,6 +411,7 @@ pub fn (m &GoogleProtobuf_Timestamp) encode_to(mut e protobuf.Encoder) {
 	if m.nanos != 0 {
 		e.write_int32_field(2, m.nanos)
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &GoogleProtobuf_Timestamp) encode() []u8 {
@@ -414,6 +428,7 @@ pub fn GoogleProtobuf_Timestamp.decode(buf []u8) !GoogleProtobuf_Timestamp {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
@@ -424,6 +439,7 @@ pub fn GoogleProtobuf_Timestamp.decode(buf []u8) !GoogleProtobuf_Timestamp {
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}

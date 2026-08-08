@@ -182,6 +182,58 @@ fn expect_gen_error(src string, want string) {
 	assert false, 'expected generate error containing "${want}"'
 }
 
+fn test_unknown_field_preservation_e2e() ! {
+	f := parse('syntax = "proto3";
+message Narrow {
+	int32 keep = 1;
+}
+message Wide {
+	int32 keep = 1;
+	string extra_s = 2;
+	repeated int32 extra_rp = 3;
+	Narrow extra_m = 4;
+	fixed64 extra_f = 5;
+}
+message Hollow {}')!
+	code := generate(f, GenOpts{})!
+	dir := os.join_path(os.temp_dir(), 'vpbgen_unknown_${os.getpid()}')
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.write_file(os.join_path(dir, 'u_pb.v'), code)!
+	os.write_file(os.join_path(dir, 'main.v'), "fn main() {
+	w := Wide{
+		keep:     7
+		extra_s:  'kept'
+		extra_rp: [1, 2, 3]
+		extra_m:  Narrow{
+			keep: 9
+		}
+		extra_f:  u64(0xDEADBEEF)
+	}
+	enc := w.encode()
+	// narrow decode keeps what it knows and preserves the rest
+	n := Narrow.decode(enc) or { panic(err) }
+	assert n.keep == 7
+	assert n.pb_unknown.len > 0
+	w2 := Wide.decode(n.encode()) or { panic(err) }
+	assert w2 == w
+	// a zero-field message must carry the whole payload byte-exactly
+	h := Hollow.decode(enc) or { panic(err) }
+	assert h.encode() == enc
+	w3 := Wide.decode(h.encode()) or { panic(err) }
+	assert w3 == w
+	// no unknowns in a same-schema roundtrip
+	assert Wide.decode(enc) or { panic(err) }.pb_unknown.len == 0
+	println('UNKNOWN OK')
+}")!
+	vexe := os.getenv_opt('VEXE') or { 'v' }
+	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	assert res.exit_code == 0, res.output
+	assert res.output.contains('UNKNOWN OK'), res.output
+}
+
 fn test_gen_errors() {
 	expect_gen_error('syntax = "proto3"; message M { Unknown u = 1; }', 'unknown type')
 	expect_gen_error('syntax = "proto3"; message Node { Node next = 1; }', 'recursive')
@@ -192,6 +244,7 @@ fn test_gen_errors() {
 		'unknown type')
 	expect_gen_error('syntax = "proto3"; service S { rpc M (A) returns (E); } message A { int32 x = 1; } enum E { Z = 0; }',
 		'must be a message')
+	expect_gen_error('syntax = "proto3"; message M { int32 pb_unknown = 1; }', 'reserved')
 }
 
 fn test_repeated_self_reference_is_fine() ! {
