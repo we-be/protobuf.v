@@ -23,5 +23,16 @@ jobs:
           check-latest: true
       - name: V version
         run: v version
+      # dump the emitted C before running, so we see it even when tests fail
+      - name: Generated C for the literal
+        run: |
+          v -o out.c probe/literal_test.v
+          echo "--- every occurrence of the literal ---"
+          grep -n '123456789012345' out.c || true
+          echo "--- assert body: test_plain_eq_bare_literal ---"
+          sed -n '/void main__test_plain_eq_bare_literal/,/^}/p' out.c
+          echo "--- if body: test_if_comparison ---"
+          sed -n '/void main__test_if_comparison/,/^}/p' out.c
+
       - name: Run probe tests
         run: v test probe/
