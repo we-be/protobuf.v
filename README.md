@@ -42,7 +42,7 @@ Generate V code from a `.proto` file:
 v run cmd/vpbgen -m main -o person_pb.v person.proto
 ```
 
-Add `-grpc person_grpc.v` to also emit gRPC client stubs for the file's services — one `<Service>Client` struct with a method per unary rpc. The stub file imports the [`grpc`](https://github.com/we-be) module and shares the message code's module.
+Add `-grpc person_grpc.v` to also emit gRPC client stubs for the file's services — one `<Service>Client` struct with a method per unary rpc. The stub file imports the [`grpc`](https://github.com/we-be/grpc.v) module and shares the message code's module.
 
 `import` statements resolve against `-I dir` flags (repeatable, in order), then the schema's own directory, then embedded copies of the `google/protobuf` well-known types — so `import "google/protobuf/timestamp.proto"` needs no files on disk. The output is self-contained: imported types are generated into the same file, which means one vpbgen run per V module (generating two protos that share an import into one module would define the shared types twice).
 
