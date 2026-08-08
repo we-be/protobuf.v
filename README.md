@@ -1,54 +1,183 @@
-# protobuf
+# protobuf.v
 
 [![CI](https://github.com/we-be/protobuf.v/actions/workflows/ci.yml/badge.svg)](https://github.com/we-be/protobuf.v/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/we-be/protobuf.v)](https://github.com/we-be/protobuf.v/releases)
 
-Protocol Buffers (proto3) for V. Wire-format runtime today; `.proto` → V code generation next.
+Complete Protocol Buffers (proto3) for V: a `.proto` → V code generator, a
+wire-format runtime, canonical JSON, and gRPC/Connect service stubs.
+Byte-exact against protoc, JSON-conformant against Go's protojson, and
+**2–3× faster than `google.golang.org/protobuf` on both encode and decode**.
 
-## Install
+- **The full proto3 language** — messages, enums, `optional`, `repeated`,
+  `map`, `oneof`, nested types, `import` with embedded well-known types,
+  unknown-field preservation, services
+- **Deterministic encoding** — same message, same bytes, every time
+- **Canonical JSON** (protojson) with the spec's WKT special forms
+- **gRPC client + [Connect](https://connectrpc.com) server codegen** for
+  [we-be/grpc.v](https://github.com/we-be/grpc.v)
+- **Four independent oracles** — protoc, protobuf-go's protojson, and (in
+  grpc.v's CI) live grpc-go and connect-go peers
+
+## Quickstart
 
 ```sh
 v install --git https://github.com/we-be/protobuf.v
 ```
 
-Then:
+Write a schema:
 
-```v
-import protobuf
+```proto
+// ping.proto
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+message Ping {
+  string host = 1;
+  google.protobuf.Timestamp at = 2;
+  map<string, int64> latencies_ns = 3;
+  oneof result {
+    int32 code = 4;
+    string error = 5;
+  }
+}
 ```
 
-Why: V has no maintained protobuf library — [vproto](https://github.com/emily33901/vproto) has been abandoned since 2022 and breaks against current compilers, protobuf-v never worked. Things worth building in V (a sqlc plugin, gRPC once V's HTTP/2 lands) speak protobuf.
-
-## Status
-
-- [x] Wire runtime: varints, zigzag, fixed32/64, length-delimited, tags, unknown-field skipping
-- [x] Cross-validated against protoc (`interop/run.sh`): 300 fuzzed messages over every scalar type, byte-for-byte identical serialization both directions
-- [x] Decoder fuzzing: 17k random/mutated buffers, errors only, no crashes
-- [x] PoC app: [examples/addressbook](examples/addressbook) — CLI whose data file protoc reads natively, and vice versa
-- [x] `.proto` → V codegen (`cmd/vpbgen`): messages, nested types, enums, repeated/packed, `optional` — validated against protoc by the same byte oracle
-- [x] `map<K, V>` fields → `map[K]V` (`map<bool, ...>` is rejected: V maps cannot key on bool)
-- [x] `oneof` → V sum type over one wrapper struct per arm, `match`-friendly, with proto3 presence semantics
-- [x] `service`/`rpc` parsing: methods with streaming flags land in the AST and their types are checked
-- [x] gRPC client stub codegen (`vpbgen -grpc out.v`): unary methods call `grpc.Client.unary`; streaming rpcs are skipped with a comment until the transport grows streaming
-- [x] `import` with `-I` search paths, transitive + deduped, cross-package references (foreign packages get a CamelCase prefix: `google.protobuf.Timestamp` → `GoogleProtobuf_Timestamp`); `google/protobuf/*.proto` well-known types are embedded like protoc's, oracle-checked byte-identical
-- [x] idiomatic time mappings on the WKTs: `Timestamp` gets `as_time()`/`from_time()` (↔ `time.Time`), `Duration` gets `as_duration()`/`from_duration()` (↔ `time.Duration`, saturating at the i64-nanosecond range like protobuf-go)
-- [x] unknown-field preservation: every struct carries `pb_unknown []u8` — fields from a newer schema survive a decode/encode roundtrip byte-exactly (note: V's `==` treats unknowns as part of the value)
-- [x] canonical JSON (protojson) via `vpbgen -json`: `json()`/`from_json()` on every message — lowerCamel names (original names accepted), 64-bit ints as strings, bytes as base64, enums by name, WKT special forms (RFC 3339 timestamps, `"1.5s"` durations, unwrapped wrappers, `Struct` as plain JSON, camelCase field masks) — cross-validated both directions against Go's protojson. Unknown JSON keys are ignored; `google.protobuf.Any` uses the plain object form (no type registry)
-
-## Usage
-
-Generate V code from a `.proto` file:
+Generate (or grab a prebuilt `vpbgen` from
+[releases](https://github.com/we-be/protobuf.v/releases)):
 
 ```sh
-v run cmd/vpbgen -m main -o person_pb.v person.proto
+v run ~/.vmodules/protobuf/cmd/vpbgen -m main -json -o ping_pb.v ping.proto
 ```
 
-Add `-grpc person_grpc.v` to also emit gRPC client stubs for the file's services — one `<Service>Client` struct with a method per unary rpc. The stub file imports the [`grpc`](https://github.com/we-be/grpc.v) module and shares the message code's module.
+Use it:
 
-`import` statements resolve against `-I dir` flags (repeatable, in order), then the schema's own directory, then embedded copies of the `google/protobuf` well-known types — so `import "google/protobuf/timestamp.proto"` needs no files on disk. The output is self-contained: imported types are generated into the same file, which means one vpbgen run per V module (generating two protos that share an import into one module would define the shared types twice).
+```v
+import time
 
-Every message becomes a struct with `encode() []u8` and a static `decode(buf) !T`. Proto3 semantics carry over: `optional` scalars and singular message fields map to `?T` (absent ≠ zero), enums are open (unknown values survive roundtrips), repeated scalars are packed unless `[packed = false]`, and `map<K, V>` fields become `map[K]V` (entries serialize sorted by key, so encoding is deterministic). A `oneof result { int32 code = 1; string text = 2; }` becomes `result ?Reply_Result` where `Reply_Result = Reply_Code | Reply_Text` — match on it, or set an arm with `result: Reply_Code{ value: 404 }`; a set arm encodes even at its zero value, exactly like protoc.
+p := Ping{
+	host:         'example.com'
+	at:           GoogleProtobuf_Timestamp.from_time(time.now())
+	latencies_ns: {
+		'p50': i64(1_200_000)
+	}
+	result:       Ping_Code{
+		value: 200
+	}
+}
 
-The generated code is exactly this shape, which you can also write by hand against the wire runtime:
+bin := p.encode() // deterministic wire bytes
+q := Ping.decode(bin)! // and back — q == p
+
+j := p.json() // {"host":"example.com","at":"2026-08-08T…Z","latenciesNs":{"p50":"1200000"},"code":200}
+r := Ping.from_json(j)!
+
+if res := q.result {
+	match res {
+		Ping_Code { println('code ${res.value}') }
+		Ping_Error { println('error ${res.value}') }
+	}
+}
+```
+
+### vpbgen
+
+```
+vpbgen [-m module] [-I dir]... [-json] [-o out_pb.v] [-grpc out_grpc.v] schema.proto
+```
+
+| flag | effect |
+|---|---|
+| `-m module` | module name for the generated file (default `main`) |
+| `-I dir` | import search path, repeatable, tried in order |
+| `-o out.v` | write message code here (stdout if omitted) |
+| `-json` | add canonical-JSON `json()` / `from_json()` methods |
+| `-grpc out.v` | also emit gRPC client stubs + Connect server glue for the file's services |
+
+Imports resolve against `-I` dirs, then the schema's own directory, then
+embedded copies of the `google/protobuf` well-known types — so
+`import "google/protobuf/timestamp.proto"` needs no files on disk. Output
+is self-contained (imported types are generated in), so run vpbgen once
+per V module.
+
+## Performance
+
+Paired V and Go harnesses over the same schema — identical deterministic
+data, identical timing methodology, byte-identical output verified — in
+[bench/](bench). V/Go time, lower is faster than Go (Go 1.26,
+protobuf-go v1.36.11, V `-prod`):
+
+| payload | encode | decode |
+|---|---|---|
+| 86 B | **0.28** | **0.51** |
+| 15 KB | **0.35** | **0.49** |
+| 1.6 MB | **0.58** | **0.55** |
+
+The schema exercises maps, a oneof, and a Timestamp submessage — and the
+gap *widened* when those were added: Go pays a heap pointer per submessage
+and an interface box per oneof arm; V's inline structs and boxed sum types
+don't. The design behind it: single-pass encoding into one exactly-sized
+buffer (`encoded_size()` + `encode_to()`, no length backpatching), `&`
+receivers on generated methods, and a decode path that borrows sub-buffers
+(`read_view`) instead of cloning them. CI attaches a fresh benchmark
+report to every release.
+
+## What generates to what
+
+| proto3 | V |
+|---|---|
+| `message`, nested types | struct, flattened names (`Person.Phone` → `Person_Phone`) |
+| scalars | native types; zero values elided on the wire |
+| `optional`, message fields | `?T` — absent is distinguishable from zero |
+| `repeated` | `[]T`, packed by default, `[packed = false]` honored |
+| `map<K, V>` | `map[K]V`; entries encode sorted by key (deterministic) |
+| `oneof` | sum type over per-arm wrapper structs, `match`-friendly; a set arm encodes even at its zero value |
+| `enum` | V enum, open — unknown values survive roundtrips |
+| `import` | cross-package references; foreign packages get a CamelCase prefix (`google.protobuf.Timestamp` → `GoogleProtobuf_Timestamp`) |
+| `Timestamp`, `Duration` | `as_time()`/`from_time()` ↔ `time.Time`, `as_duration()`/`from_duration()` ↔ `time.Duration` (saturating, like protobuf-go) |
+| unknown fields | preserved in `pb_unknown []u8`, re-emitted on encode — older schemas forward newer data losslessly |
+| `service`/`rpc` | with `-grpc`: a `<Service>Client` (unary methods over `grpc.Client`) plus a `<Service>Handler` interface and dispatch struct for `grpc.ConnectServer` |
+
+Canonical JSON (with `-json`) follows the protojson spec: lowerCamel names
+(original names accepted on parse), 64-bit ints as strings, bytes as
+base64, enums by name, defaults omitted except presence fields, and the
+WKT special forms — RFC 3339 timestamps, `"1.5s"` durations, unwrapped
+wrappers, `Struct` as plain JSON, camelCase field masks.
+
+Known edges, stated plainly: `map<bool, …>` is rejected (V maps cannot key
+on bool); `google.protobuf.Any` uses the plain object form in JSON (no
+type registry); unknown *JSON* keys are ignored on parse; V's `==`
+includes `pb_unknown`; recursion through singular message fields is
+rejected (repeated/map/oneof recursion is fine).
+
+## How it's validated
+
+- **protoc byte oracle** ([interop/run.sh](interop/run.sh)): generated
+  code encodes fuzzed messages over every feature; protoc decodes and
+  re-encodes them; the bytes must match exactly, both directions.
+- **protojson oracle**: Go's protojson must accept every JSON document we
+  emit (and decode it `proto.Equal` to the binary), and we must parse
+  every document it emits back to byte-identical re-encodings.
+- **Live service oracles** (in [grpc.v](https://github.com/we-be/grpc.v)'s
+  CI): the generated client runs against a real grpc-go server over
+  TLS/HTTP-2, and connect-go clients run against the generated Connect
+  server in both codecs.
+- **Adversarial fuzzing**: decoder-level fuzz in `v test .`, plus
+  generated-code fuzzing with bit-flipped, truncated, and spliced buffers
+  — decode errors or succeeds, never panics.
+
+```sh
+v test .                # unit + fuzz
+interop/run.sh          # protoc + protojson oracles, 300 messages
+interop/run.sh 2000 7   # more messages, different seed
+```
+
+## The wire layer
+
+The runtime under the generated code is small and policy-free — field
+helpers write tag + value unconditionally, zero-elision is the generated
+code's decision. You can target it by hand; generated code is exactly this
+shape:
 
 ```v
 import protobuf
@@ -87,45 +216,15 @@ fn Person.decode(buf []u8) !Person {
 }
 ```
 
-## Design
+Decoding is defensive throughout: truncated or overlong varints, field
+number 0, group wire types, and length prefixes past the buffer end are
+errors, never panics. Public `read_bytes` copies, so decoded messages
+never alias the input; sub-decoding borrows views internally.
 
-- **Policy-free wire layer.** Field helpers write tag + value unconditionally; proto3 zero-elision is the generated code's decision, not the runtime's.
-- **Single-pass encoding, no length backpatching.** Generated `encoded_size()` computes the exact wire size, `encode()` allocates one right-sized buffer, and `encode_to()` writes everything in a single pass — no per-submessage temporaries. Generated methods take `&` receivers, which sidesteps a V codegen pathology where loops over by-value receivers emit a per-iteration GC-keepalive walk of the whole struct (quadratic on large repeated fields). Hand-written wire code can still embed pre-encoded buffers via `write_message_field` / `write_bytes_field`.
-- **Defensive decoding.** Truncated varints, overlong varints (>10 bytes), field number 0, deprecated group wire types, and length prefixes past the end of the buffer are all errors, never panics.
-- **Copies, not views.** `read_bytes` clones, so decoded messages never alias the input buffer.
+## Example app
 
-## Tests
-
-Golden byte vectors from the [protobuf encoding docs](https://protobuf.dev/programming-guides/encoding/), boundary roundtrips, malformed-input cases, and deterministic decoder fuzzing:
-
-```sh
-v test .
-```
-
-The interop suite uses protoc as an oracle — vpbgen-generated code encodes fuzzed messages, protoc decodes and re-encodes them, bytes must match exactly, then the generated decoder reads protoc's bytes back to the original values:
-
-```sh
-interop/run.sh          # 300 messages, seed 42
-interop/run.sh 1000 7   # more messages, different seed
-```
-
-## Benchmarks
-
-[bench/](bench) holds paired V and Go harnesses over the same schema — identical deterministic data, identical timing methodology — measuring against `google.golang.org/protobuf` and verifying both implementations produce byte-identical encodings. `bench/run.sh` writes a full report; CI attaches a fresh one to every release.
-
-From a local run (Go 1.26, protobuf-go v1.36.11, V `-prod`; V/Go time, lower = V faster):
-
-| payload | encode | decode |
-|---|---|---|
-| 86 B | 0.28 | 0.51 |
-| 15 KB | 0.35 | 0.49 |
-| 1.6 MB | 0.58 | 0.55 |
-
-Encode and decode both beat Go at every size — the schema exercises maps, a oneof, and a `google.protobuf.Timestamp` submessage, and the gap *widened* when those were added (Go pays a pointer allocation per submessage and an interface box per oneof; V's inline structs and boxed sum types don't). This relies on the single-pass `encoded_size()`/`encode_to()` design, `&` receivers on generated methods, and a decode path that borrows sub-buffers (`read_view`) instead of cloning them — an earlier draft with by-value receivers and per-submessage buffers was 243× slower than Go on the large encode, and clone-per-submessage decoding was 40% slower than the current path.
-
-## Example
-
-[examples/addressbook](examples/addressbook) — the classic protobuf tutorial app as a V CLI. Its data file is a real `tutorial.AddressBook`:
+[examples/addressbook](examples/addressbook) — the protobuf tutorial app
+as a V CLI whose data file protoc reads natively:
 
 ```sh
 cd examples/addressbook
@@ -133,3 +232,11 @@ v run . add "Ada Lovelace" --email ada@analytical.uk --mobile +44-555-0100
 v run . list
 protoc --decode=tutorial.AddressBook addressbook.proto < addressbook.bin
 ```
+
+For a full service built on this stack — vlang/leveldb storage behind a
+Connect API, everything between generated — see
+[grpc.v's kvd example](https://github.com/we-be/grpc.v/tree/main/examples/kvd).
+
+## License
+
+MIT
