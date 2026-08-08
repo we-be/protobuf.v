@@ -157,6 +157,25 @@ fn gen_scalars(mut r Rng) Scalars {
 			s.mb[r.i64val()] = r.chance(50)
 		}
 	}
+	if r.chance(60) {
+		match r.below(3) {
+			0 {
+				s.choice = Scalars_Ci{
+					value: r.i32val()
+				}
+			}
+			1 {
+				s.choice = Scalars_Cs{
+					value: r.strval()
+				}
+			}
+			else {
+				s.choice = Scalars_Cn{
+					value: gen_nested(mut r)
+				}
+			}
+		}
+	}
 	return s
 }
 
@@ -188,6 +207,10 @@ fn known_scalars() Scalars {
 	}
 	s.mb[i64(-9223372036854775807) - 1] = true
 	s.mb[i64(9223372036854775807)] = false
+	// empty-string arm: oneof presence at the zero value
+	s.choice = Scalars_Cs{
+		value: ''
+	}
 	return s
 }
 

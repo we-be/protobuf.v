@@ -18,6 +18,9 @@ import strings
 // - map<K,V> becomes map[K]V; entries encode sorted by key with key and
 //   value always written, matching protoc's text-format roundtrip so the
 //   interop oracle stays byte-identical
+// - a oneof becomes ?SumType over one wrapper struct per arm (arms can
+//   share an underlying type, so bare unions won't do); arms have explicit
+//   presence — a set arm encodes even at its zero value, like protoc
 // - recursion through singular message fields is rejected (a ?T field
 //   stores its value inline in V, so the type would be infinitely sized)
 
@@ -60,6 +63,18 @@ fn sanitize(name string) string {
 		return name + '_'
 	}
 	return name
+}
+
+// proto snake_case to a V type-name suffix: text_msg -> TextMsg
+fn camel(name string) string {
+	mut out := ''
+	for part in name.split('_') {
+		if part == '' {
+			continue
+		}
+		out += part[..1].to_upper() + part[1..]
+	}
+	return out
 }
 
 fn v_scalar_type(t string) string {
@@ -323,9 +338,9 @@ fn (g &Gen) dfs(path []string, m Message, mut state map[string]int) ! {
 	mut scope := path.clone()
 	scope << m.name
 	for fld in m.fields {
-		// repeated and map fields are reference-backed containers in V, so
-		// they break recursion cycles
-		if fld.label == .repeated || fld.is_map {
+		// repeated/map fields are reference-backed containers and sum types
+		// box their variants, so all three break recursion cycles
+		if fld.label == .repeated || fld.is_map || fld.oneof != '' {
 			continue
 		}
 		if v_scalar_type(fld.typ) != '' {
@@ -402,13 +417,41 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 	mut scope := path.clone()
 	scope << m.name
 
+	for o in m.oneofs {
+		mut arm_types := []string{}
+		for fld in m.fields {
+			if fld.oneof != o.name {
+				continue
+			}
+			info := g.field_info(scope, vname, fld)!
+			at := '${vname}_${camel(fld.name)}'
+			arm_types << at
+			b.writeln('')
+			b.writeln('pub struct ${at} {')
+			b.writeln('pub mut:')
+			b.writeln('\tvalue ${info.vtype}')
+			b.writeln('}')
+		}
+		b.writeln('')
+		b.writeln('pub type ${vname}_${camel(o.name)} = ' + arm_types.join(' | '))
+	}
+
 	b.writeln('')
 	if m.fields.len == 0 {
 		b.writeln('pub struct ${vname} {}')
 	} else {
 		b.writeln('pub struct ${vname} {')
 		b.writeln('pub mut:')
+		mut seen_oneofs := map[string]bool{}
 		for fld in m.fields {
+			if fld.oneof != '' {
+				if fld.oneof in seen_oneofs {
+					continue
+				}
+				seen_oneofs[fld.oneof] = true
+				b.writeln('\t${sanitize(fld.oneof)} ?${vname}_${camel(fld.oneof)}')
+				continue
+			}
 			info := g.field_info(scope, vname, fld)!
 			mut t := info.vtype
 			if fld.is_map {
@@ -484,6 +527,19 @@ fn (mut g Gen) emit_encode_field(mut b strings.Builder, scope []string, vname st
 	info := g.field_info(scope, vname, fld)!
 	name := sanitize(fld.name)
 	n := fld.number
+	if fld.oneof != '' {
+		arm_write := match info.kind {
+			.scalar { 'e.${tagged_writer(fld.typ)}(${n}, ov.value)' }
+			.enum_ { 'e.write_int32_field(${n}, int(ov.value))' }
+			.message { 'e.write_tag(${n}, .len_delim)\n\t\t\te.write_varint(u64(ov.value.encoded_size()))\n\t\t\tov.value.encode_to(mut e)' }
+		}
+		b.writeln('\tif ov := m.${sanitize(fld.oneof)} {')
+		b.writeln('\t\tif ov is ${vname}_${camel(fld.name)} {')
+		b.writeln('\t\t\t${arm_write}')
+		b.writeln('\t\t}')
+		b.writeln('\t}')
+		return
+	}
 	if fld.is_map {
 		val_write := match info.kind {
 			.scalar { 'e.${tagged_writer(fld.typ)}(2, v)' }
@@ -599,6 +655,19 @@ fn (mut g Gen) emit_size_field(mut b strings.Builder, scope []string, vname stri
 	info := g.field_info(scope, vname, fld)!
 	name := sanitize(fld.name)
 	n := fld.number
+	if fld.oneof != '' {
+		arm_size := match info.kind {
+			.scalar { scalar_size_expr(fld.typ, n, 'ov.value') }
+			.enum_ { 'protobuf.tag_len(${n}) + protobuf.varint_len(u64(i64(int(ov.value))))' }
+			.message { 'protobuf.len_field_len(${n}, ov.value.encoded_size())' }
+		}
+		b.writeln('\tif ov := m.${sanitize(fld.oneof)} {')
+		b.writeln('\t\tif ov is ${vname}_${camel(fld.name)} {')
+		b.writeln('\t\t\tn += ${arm_size}')
+		b.writeln('\t\t}')
+		b.writeln('\t}')
+		return
+	}
 	if fld.is_map {
 		// fixed-width scalar values never reference v in the size expr
 		vvar := if info.kind == .scalar && packed_elem_width(fld.typ) > 0 { '_' } else { 'v' }
@@ -689,6 +758,19 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 	info := g.field_info(scope, vname, fld)!
 	name := sanitize(fld.name)
 	n := fld.number
+	if fld.oneof != '' {
+		arm_read := match info.kind {
+			.scalar { 'd.${scalar_reader(fld.typ)}()!' }
+			.enum_ { 'unsafe { ${info.vtype}(d.read_int32()!) }' }
+			.message { '${info.vtype}.decode(d.read_view()!)!' }
+		}
+		b.writeln('\t\t\t${n} {')
+		b.writeln('\t\t\t\tm.${sanitize(fld.oneof)} = ${vname}_${camel(fld.name)}{')
+		b.writeln('\t\t\t\t\tvalue: ${arm_read}')
+		b.writeln('\t\t\t\t}')
+		b.writeln('\t\t\t}')
+		return
+	}
 	if fld.is_map {
 		val_zero := match info.kind {
 			.scalar { zero_literal(fld.typ) }

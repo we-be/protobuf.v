@@ -66,6 +66,23 @@ pub fn Nested.decode(buf []u8) !Nested {
 	return m
 }
 
+pub struct Scalars_Ci {
+pub mut:
+	value int
+}
+
+pub struct Scalars_Cs {
+pub mut:
+	value string
+}
+
+pub struct Scalars_Cn {
+pub mut:
+	value Nested
+}
+
+pub type Scalars_Choice = Scalars_Ci | Scalars_Cs | Scalars_Cn
+
 pub struct Scalars {
 pub mut:
 	a      int
@@ -93,6 +110,7 @@ pub mut:
 	mn     map[string]Nested
 	mc     map[u32]Color
 	mb     map[i64]bool
+	choice ?Scalars_Choice
 }
 
 pub fn (m &Scalars) encoded_size() int {
@@ -180,6 +198,21 @@ pub fn (m &Scalars) encoded_size() int {
 	for k, _ in m.mb {
 		n += protobuf.len_field_len(25, protobuf.tag_len(1) +
 			protobuf.varint_len(protobuf.zigzag_encode(k)) + protobuf.tag_len(2) + 1)
+	}
+	if ov := m.choice {
+		if ov is Scalars_Ci {
+			n += protobuf.tag_len(26) + protobuf.varint_len(u64(i64(ov.value)))
+		}
+	}
+	if ov := m.choice {
+		if ov is Scalars_Cs {
+			n += protobuf.len_field_len(27, ov.value.len)
+		}
+	}
+	if ov := m.choice {
+		if ov is Scalars_Cn {
+			n += protobuf.len_field_len(28, ov.value.encoded_size())
+		}
 	}
 	return n
 }
@@ -316,6 +349,23 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 				protobuf.varint_len(protobuf.zigzag_encode(k)) + protobuf.tag_len(2) + 1))
 			e.write_sint64_field(1, k)
 			e.write_bool_field(2, v)
+		}
+	}
+	if ov := m.choice {
+		if ov is Scalars_Ci {
+			e.write_int32_field(26, ov.value)
+		}
+	}
+	if ov := m.choice {
+		if ov is Scalars_Cs {
+			e.write_string_field(27, ov.value)
+		}
+	}
+	if ov := m.choice {
+		if ov is Scalars_Cn {
+			e.write_tag(28, .len_delim)
+			e.write_varint(u64(ov.value.encoded_size()))
+			ov.value.encode_to(mut e)
 		}
 	}
 }
@@ -484,6 +534,21 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 					}
 				}
 				m.mb[mk] = mv
+			}
+			26 {
+				m.choice = Scalars_Ci{
+					value: d.read_int32()!
+				}
+			}
+			27 {
+				m.choice = Scalars_Cs{
+					value: d.read_string()!
+				}
+			}
+			28 {
+				m.choice = Scalars_Cn{
+					value: Nested.decode(d.read_view()!)!
+				}
 			}
 			else {
 				d.skip(wt)!

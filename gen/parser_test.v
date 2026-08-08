@@ -64,7 +64,8 @@ fn test_parse_repo_protos() ! {
 	scalars := parse(os.read_file(os.join_path(root, 'interop', 'scalars.proto'))!)!
 	assert scalars.messages.len == 2
 	assert scalars.messages[1].name == 'Scalars'
-	assert scalars.messages[1].fields.len == 25
+	assert scalars.messages[1].fields.len == 28
+	assert scalars.messages[1].oneofs[0].arms == ['ci', 'cs', 'cn']
 	assert scalars.enums[0].name == 'Color'
 
 	book :=
@@ -85,7 +86,11 @@ fn test_rejections() {
 	expect_parse_error('message M { int32 a = 1; }', 'syntax')
 	expect_parse_error('syntax = "proto2"; message M {}', 'only proto3')
 	expect_parse_error('syntax = "proto3"; import "other.proto";', 'import')
-	expect_parse_error('syntax = "proto3"; message M { oneof x { int32 a = 1; } }', 'oneof')
+	expect_parse_error('syntax = "proto3"; message M { oneof x { repeated int32 a = 1; } }',
+		'cannot be repeated')
+	expect_parse_error('syntax = "proto3"; message M { oneof x { map<string, int32> a = 1; } }',
+		'cannot be maps')
+	expect_parse_error('syntax = "proto3"; message M { oneof x { } }', 'has no fields')
 	expect_parse_error('syntax = "proto3"; message M { repeated map<string, int32> m = 1; }',
 		'cannot be repeated')
 	expect_parse_error('syntax = "proto3"; message M { map<bool, int32> m = 1; }',
@@ -113,6 +118,27 @@ service CodegenService {
 message GenerateRequest { int32 x = 1; }')!
 	assert f.messages.len == 1
 	assert f.messages[0].name == 'GenerateRequest'
+}
+
+fn test_oneof_fields() ! {
+	f := parse('syntax = "proto3"; message M {
+	int32 pre = 1;
+	oneof kind {
+		option deprecated = true;
+		string s = 2;
+		int32 n = 3;
+	}
+	int32 post = 4;
+}')!
+	m := f.messages[0]
+	assert m.fields.len == 4
+	assert m.oneofs.len == 1
+	assert m.oneofs[0].name == 'kind'
+	assert m.oneofs[0].arms == ['s', 'n']
+	assert m.fields[1].oneof == 'kind'
+	assert m.fields[2].oneof == 'kind'
+	assert m.fields[2].number == 3
+	assert m.fields[3].oneof == ''
 }
 
 fn test_map_fields() ! {

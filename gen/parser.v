@@ -1,8 +1,8 @@
 module gen
 
 // proto3 subset parser: syntax, package, message, enum, scalar/repeated/map
-// fields, nested messages/enums, reserved/option skipping. Unsupported
-// constructs (import, oneof, services, proto2-isms) error loudly
+// fields, oneof, nested messages/enums, reserved/option skipping.
+// Unsupported constructs (import, services, proto2-isms) error loudly
 // rather than mis-parse.
 
 pub struct File {
@@ -18,6 +18,15 @@ pub mut:
 	fields   []Field
 	messages []Message
 	enums    []Enum
+	oneofs   []Oneof
+}
+
+// arms live in Message.fields (tagged with Field.oneof) so numbering and
+// wire-order sorting see them; this records the grouping
+pub struct Oneof {
+pub mut:
+	name string
+	arms []string // arm field names, declaration order
 }
 
 pub struct Enum {
@@ -48,6 +57,7 @@ pub mut:
 	packed     bool
 	is_map     bool
 	key_typ    string // map key type; typ holds the value type
+	oneof      string // enclosing oneof name, empty for regular fields
 }
 
 // integral and string types; proto3 also allows bool, but V maps cannot
@@ -310,7 +320,44 @@ fn (mut p Parser) parse_message() !Message {
 				p.skip_to_semi()!
 			}
 			'oneof' {
-				return error('line ${t.line}: oneof is not supported yet')
+				p.next()
+				mut o := Oneof{
+					name: p.expect_ident()!.lit
+				}
+				p.expect_punct('{')!
+				for {
+					t2 := p.peek()
+					if t2.kind == .punct && t2.lit == '}' {
+						p.next()
+						break
+					}
+					if t2.kind == .eof {
+						return error('line ${t2.line}: unexpected EOF in oneof ${o.name}')
+					}
+					if t2.kind == .punct && t2.lit == ';' {
+						p.next()
+						continue
+					}
+					if t2.kind == .ident && t2.lit == 'option' {
+						p.next()
+						p.skip_to_semi()!
+						continue
+					}
+					mut fld := p.parse_field()!
+					if fld.label != .plain {
+						return error('message ${m.name}: oneof ${o.name} arms cannot be repeated or optional')
+					}
+					if fld.is_map {
+						return error('message ${m.name}: oneof ${o.name} arms cannot be maps')
+					}
+					fld.oneof = o.name
+					o.arms << fld.name
+					m.fields << fld
+				}
+				if o.arms.len == 0 {
+					return error('message ${m.name}: oneof ${o.name} has no fields')
+				}
+				m.oneofs << o
 			}
 			'extensions', 'extend', 'group' {
 				return error('line ${t.line}: `${t.lit}` is proto2-only and not supported')

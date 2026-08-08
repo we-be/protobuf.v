@@ -26,7 +26,7 @@ Why: V has no maintained protobuf library — [vproto](https://github.com/emily3
 - [x] PoC app: [examples/addressbook](examples/addressbook) — CLI whose data file protoc reads natively, and vice versa
 - [x] `.proto` → V codegen (`cmd/vpbgen`): messages, nested types, enums, repeated/packed, `optional` — validated against protoc by the same byte oracle
 - [x] `map<K, V>` fields → `map[K]V` (`map<bool, ...>` is rejected: V maps cannot key on bool)
-- [ ] oneof
+- [x] `oneof` → V sum type over one wrapper struct per arm, `match`-friendly, with proto3 presence semantics
 
 ## Usage
 
@@ -36,7 +36,7 @@ Generate V code from a `.proto` file:
 v run cmd/vpbgen -m main -o person_pb.v person.proto
 ```
 
-Every message becomes a struct with `encode() []u8` and a static `decode(buf) !T`. Proto3 semantics carry over: `optional` scalars and singular message fields map to `?T` (absent ≠ zero), enums are open (unknown values survive roundtrips), repeated scalars are packed unless `[packed = false]`, and `map<K, V>` fields become `map[K]V` (entries serialize sorted by key, so encoding is deterministic).
+Every message becomes a struct with `encode() []u8` and a static `decode(buf) !T`. Proto3 semantics carry over: `optional` scalars and singular message fields map to `?T` (absent ≠ zero), enums are open (unknown values survive roundtrips), repeated scalars are packed unless `[packed = false]`, and `map<K, V>` fields become `map[K]V` (entries serialize sorted by key, so encoding is deterministic). A `oneof result { int32 code = 1; string text = 2; }` becomes `result ?Reply_Result` where `Reply_Result = Reply_Code | Reply_Text` — match on it, or set an arm with `result: Reply_Code{ value: 404 }`; a set arm encodes even at its zero value, exactly like protoc.
 
 The generated code is exactly this shape, which you can also write by hand against the wire runtime:
 

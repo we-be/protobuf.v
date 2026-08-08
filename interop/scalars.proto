@@ -41,4 +41,9 @@ message Scalars {
   map<string, Nested> mn = 23;
   map<uint32, Color> mc = 24;
   map<sint64, bool> mb = 25;
+  oneof choice {
+    int32 ci = 26;
+    string cs = 27;
+    Nested cn = 28;
+  }
 }

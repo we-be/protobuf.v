@@ -32,6 +32,12 @@ message Person {
 	map<uint64, PersonKind> kinds = 16;
 	map<string, bool> flags = 17;
 
+	oneof contact {
+		string handle = 18;
+		Address extra = 19;
+		int32 ext = 20;
+	}
+
 	message Address {
 		string street = 1;
 		int32 zip = 2;
@@ -77,6 +83,8 @@ fn main() {
 			't': true
 			'f': false
 		}
+		// zero-valued arm: oneof presence must survive the roundtrip
+		contact:  Person_Handle{}
 	}
 	enc := p.encode()
 	q := Person.decode(enc) or { panic(err) }
@@ -97,6 +105,27 @@ fn main() {
 	assert r.opt_rank == none
 	assert r.home == none
 	assert r.attrs.len == 0
+	assert r.contact == none
+	// concatenated messages merge, so the last oneof arm on the wire wins
+	mut p3 := Person{
+		contact: Person_Extra{
+			value: Person_Address{
+				street: 's'
+			}
+		}
+	}
+	mut wire := p3.encode()
+	wire << Person{
+		contact: Person_Ext{
+			value: 7
+		}
+	}.encode()
+	q3 := Person.decode(wire) or { panic(err) }
+	if c := q3.contact {
+		assert c is Person_Ext
+	} else {
+		panic('oneof arm lost in merge')
+	}
 	println('ROUNDTRIP OK')
 }
 "
@@ -120,6 +149,9 @@ fn test_generate_structure() ! {
 	assert code.contains('places map[int]Person_Address')
 	assert code.contains('kinds map[u64]PersonKind')
 	assert code.contains('flags map[string]bool')
+	assert code.contains('pub struct Person_Handle {')
+	assert code.contains('pub type Person_Contact = Person_Handle | Person_Extra | Person_Ext')
+	assert code.contains('contact ?Person_Contact')
 }
 
 fn test_generated_roundtrip() ! {
@@ -168,4 +200,38 @@ fn test_map_self_reference_is_fine() ! {
 	f := parse('syntax = "proto3"; message Node { int32 val = 1; map<string, Node> kids = 2; }')!
 	code := generate(f, GenOpts{})!
 	assert code.contains('kids map[string]Node')
+}
+
+// sum types box their variants, so a oneof arm may recurse; prove it
+// end-to-end since the recursion check waves it through
+fn test_oneof_self_reference_e2e() ! {
+	f :=
+		parse('syntax = "proto3"; message Node { int32 val = 1; oneof next { Node child = 2; bool stop = 3; } }')!
+	code := generate(f, GenOpts{})!
+	dir := os.join_path(os.temp_dir(), 'vpbgen_oneof_rec_${os.getpid()}')
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.write_file(os.join_path(dir, 'node_pb.v'), code)!
+	os.write_file(os.join_path(dir, 'main.v'), "fn main() {
+	n := Node{
+		val:  1
+		next: Node_Child{
+			value: Node{
+				val:  2
+				next: Node_Stop{
+					value: false
+				}
+			}
+		}
+	}
+	q := Node.decode(n.encode()) or { panic(err) }
+	assert q == n
+	println('REC OK')
+}")!
+	vexe := os.getenv_opt('VEXE') or { 'v' }
+	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	assert res.exit_code == 0, res.output
+	assert res.output.contains('REC OK'), res.output
 }
