@@ -19,6 +19,20 @@ message GetResponse { bytes value = 1; }')!
 	assert code.contains("x.c.unary('/kv.KV/Get', req.encode())")
 	assert code.contains('// rpc WatchAll skipped: server streaming is not supported yet')
 	assert !code.contains('watch_all(')
+	// Connect server glue: handler interface + dispatch struct, unary only
+	assert code.contains('pub interface KVHandler {')
+	assert code.contains('\tget(req GetRequest) !GetResponse')
+	assert code.contains('pub struct KVService {')
+	assert code.contains('pub fn (mut s KVService) call(path string, codec grpc.Codec, body []u8) !([]u8, bool) {')
+	assert code.contains("'/kv.KV/Get' {")
+	// without -json the JSON codec is refused at runtime
+	assert code.contains('JSON codec unavailable')
+	jcode := generate_grpc_set(FileSet{ root: f, files: [f] }, GenOpts{
+		module_name: 'kvpb'
+		json:        true
+	})!
+	assert jcode.contains('GetRequest.from_json(body.bytestr())!')
+	assert jcode.contains('resp.json().bytes()')
 }
 
 fn test_grpc_no_package_path() ! {

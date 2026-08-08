@@ -89,7 +89,7 @@ fn main() {
 		write_out(out, code)
 	}
 	if grpc_out != '' {
-		gcode := gen.generate_grpc_set(fs, gen.GenOpts{ module_name: mod }) or {
+		gcode := gen.generate_grpc_set(fs, gen.GenOpts{ module_name: mod, json: json }) or {
 			fail('${input}: ${err.msg()}')
 		}
 		write_out(grpc_out, gcode)

@@ -35,6 +35,7 @@ pub fn generate_grpc_set(fs FileSet, opts GenOpts) !string {
 	mut g := Gen{
 		files:    fs.files
 		root_pkg: fs.root.package
+		json:     opts.json
 	}
 	for file in fs.files {
 		g.register_file(file)!
@@ -83,6 +84,78 @@ pub fn generate_grpc_set(fs FileSet, opts GenOpts) !string {
 			b.writeln('\treturn ${out_sym.vname}.decode(resp)!')
 			b.writeln('}')
 		}
+		g.emit_connect_service(mut b, svc, prefix)!
 	}
 	return b.str()
+}
+
+// server side: a handler interface for the user to implement plus a
+// dispatch struct satisfying grpc.Service for ConnectServer.mount
+fn (mut g Gen) emit_connect_service(mut b strings.Builder, svc Service, prefix string) ! {
+	mut unary := []Method{}
+	for m in svc.methods {
+		if !m.client_streaming && !m.server_streaming {
+			unary << m
+		}
+	}
+	if unary.len == 0 {
+		b.writeln('')
+		b.writeln('// service ${svc.name}: no unary methods, server glue skipped')
+		return
+	}
+	b.writeln('')
+	b.writeln('pub interface ${svc.name}Handler {')
+	b.writeln('mut:')
+	for m in unary {
+		in_sym := g.resolve_in_pkg([], m.input) or { return error('unreachable') }
+		out_sym := g.resolve_in_pkg([], m.output) or { return error('unreachable') }
+		b.writeln('\t${sanitize(snake(m.name))}(req ${in_sym.vname}) !${out_sym.vname}')
+	}
+	b.writeln('}')
+	b.writeln('')
+	b.writeln('pub struct ${svc.name}Service {')
+	b.writeln('pub mut:')
+	b.writeln('\th ${svc.name}Handler')
+	b.writeln('}')
+	b.writeln('')
+	b.writeln('pub fn (mut s ${svc.name}Service) call(path string, codec grpc.Codec, body []u8) !([]u8, bool) {')
+	b.writeln('\tmatch path {')
+	for m in unary {
+		in_sym := g.resolve_in_pkg([], m.input) or { return error('unreachable') }
+		b.writeln("\t\t'${prefix}${m.name}' {")
+		if g.json {
+			b.writeln('\t\t\treq := if codec == .json {')
+			b.writeln('\t\t\t\t${in_sym.vname}.from_json(body.bytestr())!')
+			b.writeln('\t\t\t} else {')
+			b.writeln('\t\t\t\t${in_sym.vname}.decode(body)!')
+			b.writeln('\t\t\t}')
+		} else {
+			b.writeln('\t\t\tif codec == .json {')
+			b.writeln('\t\t\t\treturn grpc.StatusError{')
+			b.writeln('\t\t\t\t\tstatus: grpc.Status{')
+			b.writeln('\t\t\t\t\t\tcode:    .unimplemented')
+			b.writeln("\t\t\t\t\t\tmessage: 'JSON codec unavailable: generate with -json'")
+			b.writeln('\t\t\t\t\t}')
+			b.writeln('\t\t\t\t}')
+			b.writeln('\t\t\t}')
+			b.writeln('\t\t\treq := ${in_sym.vname}.decode(body)!')
+		}
+		b.writeln('\t\t\tresp := s.h.${sanitize(snake(m.name))}(req)!')
+		if g.json {
+			b.writeln('\t\t\tout := if codec == .json {')
+			b.writeln('\t\t\t\tresp.json().bytes()')
+			b.writeln('\t\t\t} else {')
+			b.writeln('\t\t\t\tresp.encode()')
+			b.writeln('\t\t\t}')
+			b.writeln('\t\t\treturn out, true')
+		} else {
+			b.writeln('\t\t\treturn resp.encode(), true')
+		}
+		b.writeln('\t\t}')
+	}
+	b.writeln('\t\telse {')
+	b.writeln('\t\t\treturn []u8{}, false')
+	b.writeln('\t\t}')
+	b.writeln('\t}')
+	b.writeln('}')
 }
