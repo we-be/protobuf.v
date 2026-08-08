@@ -27,7 +27,8 @@ Why: V has no maintained protobuf library — [vproto](https://github.com/emily3
 - [x] `.proto` → V codegen (`cmd/vpbgen`): messages, nested types, enums, repeated/packed, `optional` — validated against protoc by the same byte oracle
 - [x] `map<K, V>` fields → `map[K]V` (`map<bool, ...>` is rejected: V maps cannot key on bool)
 - [x] `oneof` → V sum type over one wrapper struct per arm, `match`-friendly, with proto3 presence semantics
-- [x] `service`/`rpc` parsing: methods with streaming flags land in the AST and their types are checked; stub codegen arrives with the gRPC layer
+- [x] `service`/`rpc` parsing: methods with streaming flags land in the AST and their types are checked
+- [x] gRPC client stub codegen (`vpbgen -grpc out.v`): unary methods call `grpc.Client.unary`; streaming rpcs are skipped with a comment until the transport grows streaming
 
 ## Usage
 
@@ -36,6 +37,8 @@ Generate V code from a `.proto` file:
 ```sh
 v run cmd/vpbgen -m main -o person_pb.v person.proto
 ```
+
+Add `-grpc person_grpc.v` to also emit gRPC client stubs for the file's services — one `<Service>Client` struct with a method per unary rpc. The stub file imports the [`grpc`](https://github.com/we-be) module and shares the message code's module.
 
 Every message becomes a struct with `encode() []u8` and a static `decode(buf) !T`. Proto3 semantics carry over: `optional` scalars and singular message fields map to `?T` (absent ≠ zero), enums are open (unknown values survive roundtrips), repeated scalars are packed unless `[packed = false]`, and `map<K, V>` fields become `map[K]V` (entries serialize sorted by key, so encoding is deterministic). A `oneof result { int32 code = 1; string text = 2; }` becomes `result ?Reply_Result` where `Reply_Result = Reply_Code | Reply_Text` — match on it, or set an arm with `result: Reply_Code{ value: 404 }`; a set arm encodes even at its zero value, exactly like protoc.
 
