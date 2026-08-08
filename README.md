@@ -32,6 +32,7 @@ Why: V has no maintained protobuf library — [vproto](https://github.com/emily3
 - [x] `import` with `-I` search paths, transitive + deduped, cross-package references (foreign packages get a CamelCase prefix: `google.protobuf.Timestamp` → `GoogleProtobuf_Timestamp`); `google/protobuf/*.proto` well-known types are embedded like protoc's, oracle-checked byte-identical
 - [x] idiomatic time mappings on the WKTs: `Timestamp` gets `as_time()`/`from_time()` (↔ `time.Time`), `Duration` gets `as_duration()`/`from_duration()` (↔ `time.Duration`, saturating at the i64-nanosecond range like protobuf-go)
 - [x] unknown-field preservation: every struct carries `pb_unknown []u8` — fields from a newer schema survive a decode/encode roundtrip byte-exactly (note: V's `==` treats unknowns as part of the value)
+- [x] canonical JSON (protojson) via `vpbgen -json`: `json()`/`from_json()` on every message — lowerCamel names (original names accepted), 64-bit ints as strings, bytes as base64, enums by name, WKT special forms (RFC 3339 timestamps, `"1.5s"` durations, unwrapped wrappers, `Struct` as plain JSON, camelCase field masks) — cross-validated both directions against Go's protojson. Unknown JSON keys are ignored; `google.protobuf.Any` uses the plain object form (no type registry)
 
 ## Usage
 

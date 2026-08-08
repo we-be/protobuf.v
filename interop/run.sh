@@ -14,10 +14,10 @@ SEED="${2:-42}"
 
 # scalars_pb.v is generated — refuse to run against a stale copy
 regen="$(mktemp -d)/scalars_pb.v"
-v run ../cmd/vpbgen -m main -o "$regen" scalars.proto >/dev/null
+v run ../cmd/vpbgen -m main -json -o "$regen" scalars.proto >/dev/null
 if ! cmp -s "$regen" scalars_pb.v; then
   echo "FAIL: scalars_pb.v is stale — regenerate with:"
-  echo "  v run cmd/vpbgen -m main -o interop/scalars_pb.v interop/scalars.proto"
+  echo "  v run cmd/vpbgen -m main -json -o interop/scalars_pb.v interop/scalars.proto"
   exit 1
 fi
 
@@ -37,4 +37,13 @@ done
 echo "byte-compare vs protoc: $COUNT fuzz + known.bin identical"
 
 v run . check out "$COUNT" "$SEED"
+
+# JSON oracle: protojson accepts our JSON, we accept protojson's
+if command -v go >/dev/null; then
+  (cd jsoncheck && go build -o jsoncheck .)
+  ./jsoncheck/jsoncheck out "$COUNT"
+  v run . jsoncheck out "$COUNT" "$SEED"
+else
+  echo "skipping JSON oracle (no go toolchain)"
+fi
 echo "interop OK (generated code)"

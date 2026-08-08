@@ -31,6 +31,7 @@ import strings
 pub struct GenOpts {
 pub:
 	module_name string = 'main'
+	json        bool // also emit canonical-JSON (protojson) methods
 }
 
 struct Sym {
@@ -54,6 +55,7 @@ struct Gen {
 mut:
 	files        []File
 	root_pkg     string
+	json         bool
 	syms         map[string]Sym    // fully-qualified proto name -> V symbol
 	locs         map[string]MsgLoc // vname -> definition site, for the recursion walk
 	cur_pkg      []string          // package segments of the file being emitted
@@ -239,6 +241,7 @@ pub fn generate_set(fs FileSet, opts GenOpts) !string {
 	mut g := Gen{
 		files:    fs.files
 		root_pkg: fs.root.package
+		json:     opts.json
 	}
 	for f in fs.files {
 		g.register_file(f)!
@@ -266,6 +269,9 @@ pub fn generate_set(fs FileSet, opts GenOpts) !string {
 	b.writeln('module ${opts.module_name}')
 	if fs.files.any(it.messages.len > 0) {
 		b.writeln('')
+		if g.json {
+			b.writeln('import json2')
+		}
 		b.writeln('import protobuf')
 		// the time mappings emitted with the well-known types need it
 		if 'google.protobuf.Timestamp' in g.syms || 'google.protobuf.Duration' in g.syms {
@@ -489,6 +495,9 @@ fn (mut g Gen) emit_enum(mut b strings.Builder, path []string, e Enum) ! {
 		b.writeln('\t${sanitize(val.name.to_lower())} = ${val.number}')
 	}
 	b.writeln('}')
+	if g.json {
+		g.emit_enum_json(mut b, g.vname_for(g.cur_file_pkg, path, e.name), e)
+	}
 }
 
 fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
@@ -611,6 +620,9 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 
 	if g.cur_file_pkg == 'google.protobuf' && path.len == 0 {
 		g.emit_wkt_mappings(mut b, vname, m.name)
+	}
+	if g.json {
+		g.emit_json_methods(mut b, vname, scope, path, m)!
 	}
 
 	for c in m.messages {

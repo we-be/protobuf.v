@@ -158,9 +158,10 @@ fn gen_scalars(mut r Rng) Scalars {
 		}
 	}
 	if r.chance(50) {
+		// bounded to the spec's 0001..9999 range so protojson can emit it
 		s.ts = GoogleProtobuf_Timestamp{
-			seconds: r.i64val()
-			nanos:   r.i32val()
+			seconds: i64(r.next() % 253402300800)
+			nanos:   int(r.next() % 1000000000)
 		}
 	}
 	if r.chance(60) {
@@ -258,6 +259,7 @@ fn eq(a Scalars, b Scalars) bool {
 	return a == b
 }
 
+@[noreturn]
 fn fail(msg string) {
 	eprintln('FAIL: ${msg}')
 	exit(1)
@@ -276,11 +278,15 @@ fn main() {
 	}
 	match mode {
 		'gen' {
-			os.write_file_array('${dir}/known.bin', known_scalars().encode())!
+			known := known_scalars()
+			os.write_file_array('${dir}/known.bin', known.encode())!
+			os.write_file('${dir}/known.json', known.json())!
 			for i in 0 .. count {
-				os.write_file_array('${dir}/fuzz_${i}.bin', gen_scalars(mut r).encode())!
+				m := gen_scalars(mut r)
+				os.write_file_array('${dir}/fuzz_${i}.bin', m.encode())!
+				os.write_file('${dir}/fuzz_${i}.json', m.json())!
 			}
-			println('generated ${count} fuzz messages + known.bin')
+			println('generated ${count} fuzz messages + known.bin (bin + json)')
 		}
 		'check' {
 			known_pb := os.read_bytes('${dir}/known.protoc.bin')!
@@ -303,6 +309,29 @@ fn main() {
 				}
 			}
 			println('checked ${count} fuzz messages + known.bin against protoc')
+		}
+		'jsoncheck' {
+			// parse Go protojson output; struct and re-encoded bytes must
+			// match what we originally generated
+			mut names := ['known']
+			mut want := [known_scalars()]
+			for _ in 0 .. count {
+				want << gen_scalars(mut r)
+			}
+			for i in 0 .. count {
+				names << 'fuzz_${i}'
+			}
+			for i, n in names {
+				gj := os.read_file('${dir}/${n}.go.json')!
+				got := Scalars.from_json(gj) or { fail('${n}: from_json: ${err.msg()}') }
+				if !eq(got, want[i]) {
+					fail('${n}: Go JSON decodes differently\nwant: ${want[i]}\ngot:  ${got}')
+				}
+				if got.encode() != os.read_bytes('${dir}/${n}.bin')! {
+					fail('${n}: re-encode of Go JSON differs from original binary')
+				}
+			}
+			println('parsed ${names.len} Go protojson files back, byte-identical')
 		}
 		else {
 			fail('unknown mode ${mode}')

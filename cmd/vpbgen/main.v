@@ -1,13 +1,14 @@
 // vpbgen: generate V encode/decode code from a proto3 file.
 //
-//   v run cmd/vpbgen [-m module_name] [-I dir]... [-o out_pb.v] [-grpc out_grpc.v] schema.proto
+//   v run cmd/vpbgen [-m module_name] [-I dir]... [-json] [-o out_pb.v] [-grpc out_grpc.v] schema.proto
 //
 // Imports resolve against -I dirs in order, then the schema's own
 // directory, then embedded google/protobuf well-known types; the output
 // is self-contained (imported types are generated too). Writes to stdout
 // when -o is omitted. -grpc additionally emits gRPC client stubs for the
 // file's services (same module as the message code; the generated file
-// imports the `grpc` module). Output is v fmt'd when possible.
+// imports the `grpc` module). -json adds canonical-JSON (protojson)
+// methods to the generated messages. Output is v fmt'd when possible.
 module main
 
 import os
@@ -42,6 +43,7 @@ fn main() {
 	mut grpc_out := ''
 	mut input := ''
 	mut inc := []string{}
+	mut json := false
 	mut i := 0
 	for i < args.len {
 		match args[i] {
@@ -52,6 +54,10 @@ fn main() {
 			'-I' {
 				inc << arg_val(args, i)
 				i += 2
+			}
+			'-json' {
+				json = true
+				i++
 			}
 			'-o' {
 				out = arg_val(args, i)
@@ -74,7 +80,7 @@ fn main() {
 		fail('usage: vpbgen [-m module] [-o out.v] [-grpc out_grpc.v] file.proto')
 	}
 	fs := gen.load(input, gen.LoadOpts{ paths: inc }) or { fail(err.msg()) }
-	code := gen.generate_set(fs, gen.GenOpts{ module_name: mod }) or {
+	code := gen.generate_set(fs, gen.GenOpts{ module_name: mod, json: json }) or {
 		fail('${input}: ${err.msg()}')
 	}
 	if out == '' {
