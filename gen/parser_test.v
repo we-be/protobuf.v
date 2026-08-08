@@ -64,8 +64,9 @@ fn test_parse_repo_protos() ! {
 	scalars := parse(os.read_file(os.join_path(root, 'interop', 'scalars.proto'))!)!
 	assert scalars.messages.len == 2
 	assert scalars.messages[1].name == 'Scalars'
-	assert scalars.messages[1].fields.len == 28
+	assert scalars.messages[1].fields.len == 29
 	assert scalars.messages[1].oneofs[0].arms == ['ci', 'cs', 'cn']
+	assert scalars.imports == ['google/protobuf/timestamp.proto']
 	assert scalars.services[0].name == 'ScalarService'
 	assert scalars.services[0].methods[1].server_streaming
 	assert scalars.enums[0].name == 'Color'
@@ -87,7 +88,7 @@ fn expect_parse_error(src string, want string) {
 fn test_rejections() {
 	expect_parse_error('message M { int32 a = 1; }', 'syntax')
 	expect_parse_error('syntax = "proto2"; message M {}', 'only proto3')
-	expect_parse_error('syntax = "proto3"; import "other.proto";', 'import')
+	expect_parse_error('syntax = "proto3"; import weak "other.proto";', 'weak')
 	expect_parse_error('syntax = "proto3"; message M { oneof x { repeated int32 a = 1; } }',
 		'cannot be repeated')
 	expect_parse_error('syntax = "proto3"; message M { oneof x { map<string, int32> a = 1; } }',

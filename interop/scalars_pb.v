@@ -111,6 +111,7 @@ pub mut:
 	mc     map[u32]Color
 	mb     map[i64]bool
 	choice ?Scalars_Choice
+	ts     ?GoogleProtobuf_Timestamp
 }
 
 pub fn (m &Scalars) encoded_size() int {
@@ -213,6 +214,9 @@ pub fn (m &Scalars) encoded_size() int {
 		if ov is Scalars_Cn {
 			n += protobuf.len_field_len(28, ov.value.encoded_size())
 		}
+	}
+	if ts := m.ts {
+		n += protobuf.len_field_len(29, ts.encoded_size())
 	}
 	return n
 }
@@ -367,6 +371,11 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 			e.write_varint(u64(ov.value.encoded_size()))
 			ov.value.encode_to(mut e)
 		}
+	}
+	if ts := m.ts {
+		e.write_tag(29, .len_delim)
+		e.write_varint(u64(ts.encoded_size()))
+		ts.encode_to(mut e)
 	}
 }
 
@@ -549,6 +558,65 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 				m.choice = Scalars_Cn{
 					value: Nested.decode(d.read_view()!)!
 				}
+			}
+			29 {
+				m.ts = GoogleProtobuf_Timestamp.decode(d.read_view()!)!
+			}
+			else {
+				d.skip(wt)!
+			}
+		}
+	}
+	return m
+}
+
+pub struct GoogleProtobuf_Timestamp {
+pub mut:
+	seconds i64
+	nanos   int
+}
+
+pub fn (m &GoogleProtobuf_Timestamp) encoded_size() int {
+	mut n := 0
+	if m.seconds != 0 {
+		n += protobuf.tag_len(1) + protobuf.varint_len(u64(m.seconds))
+	}
+	if m.nanos != 0 {
+		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.nanos)))
+	}
+	return n
+}
+
+pub fn (m &GoogleProtobuf_Timestamp) encode_to(mut e protobuf.Encoder) {
+	if m.seconds != 0 {
+		e.write_int64_field(1, m.seconds)
+	}
+	if m.nanos != 0 {
+		e.write_int32_field(2, m.nanos)
+	}
+}
+
+pub fn (m &GoogleProtobuf_Timestamp) encode() []u8 {
+	mut e := protobuf.Encoder{
+		buf: []u8{cap: m.encoded_size()}
+	}
+	m.encode_to(mut e)
+	return e.buf
+}
+
+pub fn GoogleProtobuf_Timestamp.decode(buf []u8) !GoogleProtobuf_Timestamp {
+	mut m := GoogleProtobuf_Timestamp{}
+	mut d := protobuf.Decoder{
+		buf: buf
+	}
+	for d.more() {
+		field, wt := d.read_tag()!
+		match field {
+			1 {
+				m.seconds = d.read_int64()!
+			}
+			2 {
+				m.nanos = d.read_int32()!
 			}
 			else {
 				d.skip(wt)!

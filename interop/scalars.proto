@@ -3,6 +3,10 @@
 // runtime against protoc byte-for-byte.
 syntax = "proto3";
 
+// protoc resolves this from its built-in pool; vpbgen from its embedded
+// copy — the oracle byte-compare proves the two agree
+import "google/protobuf/timestamp.proto";
+
 enum Color {
   COLOR_UNSPECIFIED = 0;
   RED = 1;
@@ -46,6 +50,7 @@ message Scalars {
     string cs = 27;
     Nested cn = 28;
   }
+  google.protobuf.Timestamp ts = 29;
 }
 
 // parsed into the AST (and type-checked) but emits no code yet; stub

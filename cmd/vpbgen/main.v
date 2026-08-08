@@ -1,11 +1,13 @@
 // vpbgen: generate V encode/decode code from a proto3 file.
 //
-//   v run cmd/vpbgen [-m module_name] [-o out_pb.v] [-grpc out_grpc.v] schema.proto
+//   v run cmd/vpbgen [-m module_name] [-I dir]... [-o out_pb.v] [-grpc out_grpc.v] schema.proto
 //
-// Writes to stdout when -o is omitted. -grpc additionally emits gRPC
-// client stubs for the file's services (same module as the message code;
-// the generated file imports the `grpc` module). Output is v fmt'd when
-// possible.
+// Imports resolve against -I dirs in order, then the schema's own
+// directory, then embedded google/protobuf well-known types; the output
+// is self-contained (imported types are generated too). Writes to stdout
+// when -o is omitted. -grpc additionally emits gRPC client stubs for the
+// file's services (same module as the message code; the generated file
+// imports the `grpc` module). Output is v fmt'd when possible.
 module main
 
 import os
@@ -39,11 +41,16 @@ fn main() {
 	mut out := ''
 	mut grpc_out := ''
 	mut input := ''
+	mut inc := []string{}
 	mut i := 0
 	for i < args.len {
 		match args[i] {
 			'-m' {
 				mod = arg_val(args, i)
+				i += 2
+			}
+			'-I' {
+				inc << arg_val(args, i)
 				i += 2
 			}
 			'-o' {
@@ -66,16 +73,17 @@ fn main() {
 	if input == '' {
 		fail('usage: vpbgen [-m module] [-o out.v] [-grpc out_grpc.v] file.proto')
 	}
-	src := os.read_file(input) or { fail('cannot read ${input}: ${err}') }
-	f := gen.parse(src) or { fail('${input}: ${err.msg()}') }
-	code := gen.generate(f, gen.GenOpts{ module_name: mod }) or { fail('${input}: ${err.msg()}') }
+	fs := gen.load(input, gen.LoadOpts{ paths: inc }) or { fail(err.msg()) }
+	code := gen.generate_set(fs, gen.GenOpts{ module_name: mod }) or {
+		fail('${input}: ${err.msg()}')
+	}
 	if out == '' {
 		print(code)
 	} else {
 		write_out(out, code)
 	}
 	if grpc_out != '' {
-		gcode := gen.generate_grpc(f, gen.GenOpts{ module_name: mod }) or {
+		gcode := gen.generate_grpc_set(fs, gen.GenOpts{ module_name: mod }) or {
 			fail('${input}: ${err.msg()}')
 		}
 		write_out(grpc_out, gcode)

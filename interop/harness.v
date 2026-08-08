@@ -157,6 +157,12 @@ fn gen_scalars(mut r Rng) Scalars {
 			s.mb[r.i64val()] = r.chance(50)
 		}
 	}
+	if r.chance(50) {
+		s.ts = GoogleProtobuf_Timestamp{
+			seconds: r.i64val()
+			nanos:   r.i32val()
+		}
+	}
 	if r.chance(60) {
 		match r.below(3) {
 			0 {
@@ -210,6 +216,10 @@ fn known_scalars() Scalars {
 	// empty-string arm: oneof presence at the zero value
 	s.choice = Scalars_Cs{
 		value: ''
+	}
+	s.ts = GoogleProtobuf_Timestamp{
+		seconds: i64(-62135596800)
+		nanos:   999999999
 	}
 	return s
 }

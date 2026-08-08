@@ -8,6 +8,7 @@ module gen
 pub struct File {
 pub mut:
 	package  string
+	imports  []string // import paths as written; `public` folds into these
 	messages []Message
 	enums    []Enum
 	services []Service
@@ -267,7 +268,20 @@ pub fn parse(src string) !File {
 				p.skip_to_semi()!
 			}
 			'import' {
-				return error('line ${t.line}: import is not supported yet')
+				p.next()
+				mut s := p.next()
+				if s.kind == .ident && s.lit == 'public' {
+					// visibility is resolved transitively here, so public
+					// imports need no special handling
+					s = p.next()
+				} else if s.kind == .ident && s.lit == 'weak' {
+					return error('line ${s.line}: `import weak` is not supported')
+				}
+				if s.kind != .str {
+					return error('line ${s.line}: expected import path string, got `${s.lit}`')
+				}
+				f.imports << s.lit
+				p.expect_punct(';')!
 			}
 			'message' {
 				f.messages << p.parse_message()!
