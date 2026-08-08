@@ -72,3 +72,23 @@ gopb="$(sed -n 's|.*google.golang.org/protobuf \(v[0-9.]*\).*|\1|p' go/go.mod | 
 } >"$out"
 
 echo "wrote $out"
+
+# regression gate: with MAX_RATIO set, fail if any cell's V/Go time ratio
+# exceeds it. Ratios are same-run, same-box comparisons, so machine noise
+# largely cancels — a tripped gate means a real relative slowdown.
+if [ -n "${MAX_RATIO:-}" ]; then
+  viol="$(awk -F, -v max="$MAX_RATIO" '
+    FNR == NR { vns[$2 "," $3] = $6; next }
+    {
+      k = $2 "," $3
+      r = vns[k] / $6
+      if (r > max) printf "  %s n=%s: V/Go %.2f > %s\n", $2, $3, r, max
+    }
+  ' "$tmp/v.csv" "$tmp/go.csv")"
+  if [ -n "$viol" ]; then
+    echo "PERF GATE FAILED (MAX_RATIO=$MAX_RATIO):"
+    echo "$viol"
+    exit 1
+  fi
+  echo "perf gate OK: every cell within ${MAX_RATIO}x of Go"
+fi

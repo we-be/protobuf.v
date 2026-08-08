@@ -62,3 +62,42 @@ jobs:
       # keep the release-time benchmark harness from rotting
       - name: Build bench harness
         run: v -o /tmp/pbbench-v bench/v
+
+  # full V-vs-Go benchmark with a regression gate. Runner hardware is too
+  # noisy for absolute numbers, but V and Go run back-to-back on the same
+  # box so the V/Go ratio is stable; 0.85 leaves fat headroom over the
+  # ~0.6 worst cell while catching any real slower-than-Go regression
+  # (clone-per-submessage decoding, the one regression we have had, sat
+  # at 1.06).
+  perf:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: repo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Setup V
+        uses: vlang/setup-v@v1
+        with:
+          check-latest: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Link module into vmodules
+        run: |
+          mkdir -p ~/.vmodules
+          ln -s "$PWD" ~/.vmodules/protobuf
+
+      - name: Benchmark with regression gate
+        run: MAX_RATIO=0.85 ./bench/run.sh /tmp/bench-results.md
+
+      - name: Publish table to job summary
+        if: always()
+        run: cat /tmp/bench-results.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
