@@ -263,6 +263,10 @@ pub fn generate_set(fs FileSet, opts GenOpts) !string {
 	if fs.files.any(it.messages.len > 0) {
 		b.writeln('')
 		b.writeln('import protobuf')
+		// the time mappings emitted with the well-known types need it
+		if 'google.protobuf.Timestamp' in g.syms || 'google.protobuf.Duration' in g.syms {
+			b.writeln('import time')
+		}
 	}
 	for f in fs.files {
 		g.set_cur(f)
@@ -589,8 +593,68 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 	b.writeln('\treturn m')
 	b.writeln('}')
 
+	if g.cur_file_pkg == 'google.protobuf' && path.len == 0 {
+		g.emit_wkt_mappings(mut b, vname, m.name)
+	}
+
 	for c in m.messages {
 		g.emit_message(mut b, scope, c)!
+	}
+}
+
+// idiomatic V conversions on the well-known types, detected by
+// fully-qualified name like protoc does
+fn (mut g Gen) emit_wkt_mappings(mut b strings.Builder, vname string, name string) {
+	match name {
+		'Timestamp' {
+			b.writeln('')
+			b.writeln('// as_time converts to time.Time (UTC); out-of-spec nanos are clamped')
+			b.writeln('pub fn (m &${vname}) as_time() time.Time {')
+			b.writeln('\tmut n := m.nanos')
+			b.writeln('\tif n < 0 {')
+			b.writeln('\t\tn = 0')
+			b.writeln('\t} else if n > 999_999_999 {')
+			b.writeln('\t\tn = 999_999_999')
+			b.writeln('\t}')
+			b.writeln('\treturn time.unix_nanosecond(m.seconds, n)')
+			b.writeln('}')
+			b.writeln('')
+			b.writeln('pub fn ${vname}.from_time(t time.Time) ${vname} {')
+			b.writeln('\treturn ${vname}{')
+			b.writeln('\t\tseconds: t.unix()')
+			b.writeln('\t\tnanos:   t.nanosecond')
+			b.writeln('\t}')
+			b.writeln('}')
+		}
+		'Duration' {
+			b.writeln('')
+			b.writeln('// as_duration saturates at the i64-nanosecond range (~±292 years),')
+			b.writeln('// like protobuf-go — proto durations span ±10000 years')
+			b.writeln('pub fn (m &${vname}) as_duration() time.Duration {')
+			b.writeln('\tif m.seconds >= 9223372037 {')
+			b.writeln('\t\treturn time.Duration(i64(9223372036854775807))')
+			b.writeln('\t}')
+			b.writeln('\tif m.seconds <= -9223372037 {')
+			b.writeln('\t\treturn time.Duration(i64(-9223372036854775807) - 1)')
+			b.writeln('\t}')
+			b.writeln('\tsecs_ns := m.seconds * 1_000_000_000')
+			b.writeln('\tif secs_ns > 0 && i64(m.nanos) > 9223372036854775807 - secs_ns {')
+			b.writeln('\t\treturn time.Duration(i64(9223372036854775807))')
+			b.writeln('\t}')
+			b.writeln('\tif secs_ns < 0 && i64(m.nanos) < (i64(-9223372036854775807) - 1) - secs_ns {')
+			b.writeln('\t\treturn time.Duration(i64(-9223372036854775807) - 1)')
+			b.writeln('\t}')
+			b.writeln('\treturn time.Duration(secs_ns + i64(m.nanos))')
+			b.writeln('}')
+			b.writeln('')
+			b.writeln('pub fn ${vname}.from_duration(d time.Duration) ${vname} {')
+			b.writeln('\treturn ${vname}{')
+			b.writeln('\t\tseconds: i64(d) / 1_000_000_000')
+			b.writeln('\t\tnanos:   int(i64(d) % 1_000_000_000)')
+			b.writeln('\t}')
+			b.writeln('}')
+		}
+		else {}
 	}
 }
 

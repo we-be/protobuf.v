@@ -159,4 +159,76 @@ service Ping {
 	assert code.contains('pub type GoogleProtobuf_Value_Kind =')
 	stubs := generate_grpc_set(fs, GenOpts{})!
 	assert stubs.contains('poke(req GoogleProtobuf_Empty) !Event {')
+	// time mappings ride along with the WKT emission
+	assert code.contains('import time')
+	assert code.contains('pub fn (m &GoogleProtobuf_Timestamp) as_time() time.Time {')
+	assert code.contains('pub fn GoogleProtobuf_Timestamp.from_time(t time.Time) GoogleProtobuf_Timestamp {')
+}
+
+fn test_wkt_time_mappings_e2e() ! {
+	dir := os.join_path(os.temp_dir(), 'vpbgen_wkt_time_${os.getpid()}')
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	write_protos(dir, {
+		'x.proto': 'syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+message Span {
+	google.protobuf.Timestamp at = 1;
+	google.protobuf.Duration length = 2;
+}'
+	})!
+	fs := load(os.join_path(dir, 'x.proto'), LoadOpts{})!
+	code := generate_set(fs, GenOpts{})!
+	edir := os.join_path(dir, 'e2e')
+	os.mkdir_all(edir)!
+	os.write_file(os.join_path(edir, 'x_pb.v'), code)!
+	os.write_file(os.join_path(edir, 'main.v'), "fn main() {
+	ts := GoogleProtobuf_Timestamp{
+		seconds: 1700000000
+		nanos:   123456789
+	}
+	t := ts.as_time()
+	assert t.unix() == 1700000000
+	assert GoogleProtobuf_Timestamp.from_time(t) == ts
+	// pre-epoch: negative seconds, spec-positive nanos
+	old := GoogleProtobuf_Timestamp{
+		seconds: -1
+		nanos:   500000000
+	}
+	assert GoogleProtobuf_Timestamp.from_time(old.as_time()) == old
+	// duration: exact, negative, and roundtrip
+	d := GoogleProtobuf_Duration{
+		seconds: 90
+		nanos:   500000000
+	}
+	assert i64(d.as_duration()) == 90500000000
+	nd := GoogleProtobuf_Duration{
+		seconds: -1
+		nanos:   -500000000
+	}
+	assert i64(nd.as_duration()) == -1500000000
+	assert GoogleProtobuf_Duration.from_duration(nd.as_duration()) == nd
+	// saturation: far out, and the hair's-breadth case where seconds fit
+	// in i64 nanos but seconds+nanos does not
+	big := GoogleProtobuf_Duration{
+		seconds: 315576000000
+	}
+	assert i64(big.as_duration()) == 9223372036854775807
+	neg := GoogleProtobuf_Duration{
+		seconds: -315576000000
+	}
+	assert i64(neg.as_duration()) == i64(-9223372036854775807) - 1
+	edge := GoogleProtobuf_Duration{
+		seconds: 9223372036
+		nanos:   999999999
+	}
+	assert i64(edge.as_duration()) == 9223372036854775807
+	println('WKT TIME OK')
+}")!
+	vexe := os.getenv_opt('VEXE') or { 'v' }
+	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(edir)}')
+	assert res.exit_code == 0, res.output
+	assert res.output.contains('WKT TIME OK'), res.output
 }

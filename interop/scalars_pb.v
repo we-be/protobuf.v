@@ -2,6 +2,7 @@
 module main
 
 import protobuf
+import time
 
 pub enum Color {
 	color_unspecified = 0
@@ -624,4 +625,22 @@ pub fn GoogleProtobuf_Timestamp.decode(buf []u8) !GoogleProtobuf_Timestamp {
 		}
 	}
 	return m
+}
+
+// as_time converts to time.Time (UTC); out-of-spec nanos are clamped
+pub fn (m &GoogleProtobuf_Timestamp) as_time() time.Time {
+	mut n := m.nanos
+	if n < 0 {
+		n = 0
+	} else if n > 999_999_999 {
+		n = 999_999_999
+	}
+	return time.unix_nanosecond(m.seconds, n)
+}
+
+pub fn GoogleProtobuf_Timestamp.from_time(t time.Time) GoogleProtobuf_Timestamp {
+	return GoogleProtobuf_Timestamp{
+		seconds: t.unix()
+		nanos:   t.nanosecond
+	}
 }

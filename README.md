@@ -30,6 +30,7 @@ Why: V has no maintained protobuf library — [vproto](https://github.com/emily3
 - [x] `service`/`rpc` parsing: methods with streaming flags land in the AST and their types are checked
 - [x] gRPC client stub codegen (`vpbgen -grpc out.v`): unary methods call `grpc.Client.unary`; streaming rpcs are skipped with a comment until the transport grows streaming
 - [x] `import` with `-I` search paths, transitive + deduped, cross-package references (foreign packages get a CamelCase prefix: `google.protobuf.Timestamp` → `GoogleProtobuf_Timestamp`); `google/protobuf/*.proto` well-known types are embedded like protoc's, oracle-checked byte-identical
+- [x] idiomatic time mappings on the WKTs: `Timestamp` gets `as_time()`/`from_time()` (↔ `time.Time`), `Duration` gets `as_duration()`/`from_duration()` (↔ `time.Duration`, saturating at the i64-nanosecond range like protobuf-go)
 
 ## Usage
 
