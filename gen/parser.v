@@ -1,8 +1,8 @@
 module gen
 
 // proto3 subset parser: syntax, package, message, enum, scalar/repeated/map
-// fields, oneof, nested messages/enums, reserved/option skipping.
-// Unsupported constructs (import, services, proto2-isms) error loudly
+// fields, oneof, service/rpc, nested messages/enums, reserved/option
+// skipping. Unsupported constructs (import, proto2-isms) error loudly
 // rather than mis-parse.
 
 pub struct File {
@@ -10,6 +10,22 @@ pub mut:
 	package  string
 	messages []Message
 	enums    []Enum
+	services []Service
+}
+
+pub struct Service {
+pub mut:
+	name    string
+	methods []Method
+}
+
+pub struct Method {
+pub mut:
+	name             string
+	input            string // request type as written
+	output           string // response type as written
+	client_streaming bool
+	server_streaming bool
 }
 
 pub struct Message {
@@ -260,23 +276,7 @@ pub fn parse(src string) !File {
 				f.enums << p.parse_enum()!
 			}
 			'service' {
-				// services are gRPC-only; ignore them like protoc does
-				p.next()
-				p.expect_ident()!
-				p.expect_punct('{')!
-				mut depth := 1
-				for depth > 0 {
-					t2 := p.next()
-					if t2.kind == .eof {
-						return error('line ${t2.line}: unexpected EOF in service')
-					}
-					if t2.kind == .punct && t2.lit == '{' {
-						depth++
-					}
-					if t2.kind == .punct && t2.lit == '}' {
-						depth--
-					}
-				}
+				f.services << p.parse_service()!
 			}
 			else {
 				return error('line ${t.line}: unexpected `${t.lit}`')
@@ -450,6 +450,81 @@ fn (mut p Parser) parse_field() !Field {
 		return error('line ${t2.line}: expected `;` after field ${fld.name}')
 	}
 	return fld
+}
+
+fn (mut p Parser) parse_service() !Service {
+	p.next() // `service`
+	mut s := Service{
+		name: p.expect_ident()!.lit
+	}
+	p.expect_punct('{')!
+	for {
+		t := p.peek()
+		if t.kind == .punct && t.lit == '}' {
+			p.next()
+			break
+		}
+		if t.kind == .eof {
+			return error('line ${t.line}: unexpected EOF in service ${s.name}')
+		}
+		if t.kind == .punct && t.lit == ';' {
+			p.next()
+			continue
+		}
+		if t.kind == .ident && t.lit == 'option' {
+			p.next()
+			p.skip_to_semi()!
+			continue
+		}
+		if !(t.kind == .ident && t.lit == 'rpc') {
+			return error('line ${t.line}: unexpected `${t.lit}` in service ${s.name}')
+		}
+		p.next()
+		mut m := Method{
+			name: p.expect_ident()!.lit
+		}
+		p.expect_punct('(')!
+		mut it := p.expect_ident()!
+		if it.lit == 'stream' {
+			m.client_streaming = true
+			it = p.expect_ident()!
+		}
+		m.input = it.lit
+		p.expect_punct(')')!
+		ret := p.expect_ident()!
+		if ret.lit != 'returns' {
+			return error('line ${ret.line}: expected `returns`, got `${ret.lit}`')
+		}
+		p.expect_punct('(')!
+		mut ot := p.expect_ident()!
+		if ot.lit == 'stream' {
+			m.server_streaming = true
+			ot = p.expect_ident()!
+		}
+		m.output = ot.lit
+		p.expect_punct(')')!
+		t2 := p.next()
+		if t2.kind == .punct && t2.lit == '{' {
+			// method options body — skip balanced braces
+			mut depth := 1
+			for depth > 0 {
+				t3 := p.next()
+				if t3.kind == .eof {
+					return error('line ${t3.line}: unexpected EOF in rpc ${m.name}')
+				}
+				if t3.kind == .punct && t3.lit == '{' {
+					depth++
+				}
+				if t3.kind == .punct && t3.lit == '}' {
+					depth--
+				}
+			}
+		} else if !(t2.kind == .punct && t2.lit == ';') {
+			return error('line ${t2.line}: expected `;` or `{` after rpc ${m.name}')
+		}
+		s.methods << m
+	}
+	return s
 }
 
 fn (mut p Parser) parse_enum() !Enum {

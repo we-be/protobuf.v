@@ -47,3 +47,10 @@ message Scalars {
     Nested cn = 28;
   }
 }
+
+// parsed into the AST (and type-checked) but emits no code yet; stub
+// codegen arrives with the grpc module
+service ScalarService {
+  rpc Roundtrip (Scalars) returns (Scalars);
+  rpc Watch (Nested) returns (stream Scalars);
+}

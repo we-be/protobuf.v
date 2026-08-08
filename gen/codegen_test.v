@@ -188,6 +188,10 @@ fn test_gen_errors() {
 	expect_gen_error('syntax = "proto3"; message A { B b = 1; } message B { A a = 1; }',
 		'recursive')
 	expect_gen_error('syntax = "proto3"; enum E { A = 0; B = 0; }', 'allow_alias')
+	expect_gen_error('syntax = "proto3"; service S { rpc M (A) returns (B); } message A { int32 x = 1; }',
+		'unknown type')
+	expect_gen_error('syntax = "proto3"; service S { rpc M (A) returns (E); } message A { int32 x = 1; } enum E { Z = 0; }',
+		'must be a message')
 }
 
 fn test_repeated_self_reference_is_fine() ! {

@@ -66,6 +66,8 @@ fn test_parse_repo_protos() ! {
 	assert scalars.messages[1].name == 'Scalars'
 	assert scalars.messages[1].fields.len == 28
 	assert scalars.messages[1].oneofs[0].arms == ['ci', 'cs', 'cn']
+	assert scalars.services[0].name == 'ScalarService'
+	assert scalars.services[0].methods[1].server_streaming
 	assert scalars.enums[0].name == 'Color'
 
 	book :=
@@ -108,16 +110,28 @@ fn test_rejections() {
 	expect_parse_error('syntax = "proto3"; enum E { A = 1; }', 'first value')
 }
 
-fn test_services_are_skipped() ! {
+fn test_service_parsing() ! {
 	f := parse('syntax = "proto3";
-service CodegenService {
-	rpc Generate (GenerateRequest) returns (GenerateResponse) {
+service KV {
+	option deprecated = true;
+	rpc Get (GetRequest) returns (GetResponse);
+	rpc Watch (WatchRequest) returns (stream WatchResponse) {
 		option idempotency_level = NO_SIDE_EFFECTS;
 	}
+	rpc Push (stream PushRequest) returns (PushResponse);
 }
-message GenerateRequest { int32 x = 1; }')!
+message GetRequest { int32 x = 1; }')!
 	assert f.messages.len == 1
-	assert f.messages[0].name == 'GenerateRequest'
+	assert f.services.len == 1
+	svc := f.services[0]
+	assert svc.name == 'KV'
+	assert svc.methods.len == 3
+	assert svc.methods[0].name == 'Get'
+	assert svc.methods[0].input == 'GetRequest'
+	assert svc.methods[0].output == 'GetResponse'
+	assert !svc.methods[0].client_streaming && !svc.methods[0].server_streaming
+	assert svc.methods[1].server_streaming && !svc.methods[1].client_streaming
+	assert svc.methods[2].client_streaming && !svc.methods[2].server_streaming
 }
 
 fn test_oneof_fields() ! {

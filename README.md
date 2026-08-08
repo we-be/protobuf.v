@@ -27,6 +27,7 @@ Why: V has no maintained protobuf library — [vproto](https://github.com/emily3
 - [x] `.proto` → V codegen (`cmd/vpbgen`): messages, nested types, enums, repeated/packed, `optional` — validated against protoc by the same byte oracle
 - [x] `map<K, V>` fields → `map[K]V` (`map<bool, ...>` is rejected: V maps cannot key on bool)
 - [x] `oneof` → V sum type over one wrapper struct per arm, `match`-friendly, with proto3 presence semantics
+- [x] `service`/`rpc` parsing: methods with streaming flags land in the AST and their types are checked; stub codegen arrives with the gRPC layer
 
 ## Usage
 
