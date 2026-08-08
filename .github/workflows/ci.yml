@@ -11,7 +11,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        v: [master, stable]
     runs-on: ${{ matrix.os }}
+    # V tags releases months apart, so master is where our users are and is
+    # the blocking signal. The stable leg is advisory: it tells us a release
+    # install can still build us, but it also goes red for compiler bugs
+    # already fixed upstream, which are not ours to fix.
+    continue-on-error: ${{ matrix.v == 'stable' }}
     # setup-v drops the whole V toolchain into the workspace root, and
     # v fmt/test recurse — keep our tree in a subdir so they never meet
     defaults:
@@ -26,6 +32,12 @@ jobs:
         uses: vlang/setup-v@v1
         with:
           check-latest: true
+          stable: ${{ matrix.v == 'stable' }}
+
+      # a tarball install has no .git, so this prints a bare version with no
+      # commit — check the setup-v step's download URL to identify the build
+      - name: V version
+        run: v version
 
       - name: Setup protoc
         uses: arduino/setup-protoc@v3
