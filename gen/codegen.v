@@ -15,6 +15,9 @@ import strings
 // - enums are open: unknown values survive a decode/encode roundtrip via
 //   unsafe cast, like other proto3 implementations
 // - repeated scalars/enums are packed unless [packed = false]
+// - map<K,V> becomes map[K]V; entries encode sorted by key with key and
+//   value always written, matching protoc's text-format roundtrip so the
+//   interop oracle stays byte-identical
 // - recursion through singular message fields is rejected (a ?T field
 //   stores its value inline in V, so the type would be infinitely sized)
 
@@ -151,6 +154,33 @@ fn packed_elem_width(t string) int {
 		'double', 'fixed64', 'sfixed64' { 8 }
 		else { 0 }
 	}
+}
+
+fn zero_literal(t string) string {
+	return match t {
+		'bool' { 'false' }
+		'string' { "''" }
+		'bytes' { '[]u8{}' }
+		'float' { 'f32(0)' }
+		'double' { 'f64(0)' }
+		'int32', 'sint32', 'sfixed32' { '0' }
+		'int64', 'sint64', 'sfixed64' { 'i64(0)' }
+		'uint32', 'fixed32' { 'u32(0)' }
+		'uint64', 'fixed64' { 'u64(0)' }
+		else { '' }
+	}
+}
+
+// one serialized map entry: key field 1 + value field 2, both always
+// written (protoc does the same, even for defaults)
+fn map_entry_size_expr(fld Field, info FieldInfo) string {
+	key := scalar_size_expr(fld.key_typ, 1, 'k')
+	val := match info.kind {
+		.scalar { scalar_size_expr(fld.typ, 2, 'v') }
+		.enum_ { 'protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(v))))' }
+		.message { 'protobuf.len_field_len(2, v.encoded_size())' }
+	}
+	return '${key} + ${val}'
 }
 
 fn zero_check(t string, expr string) string {
@@ -293,7 +323,9 @@ fn (g &Gen) dfs(path []string, m Message, mut state map[string]int) ! {
 	mut scope := path.clone()
 	scope << m.name
 	for fld in m.fields {
-		if fld.label == .repeated {
+		// repeated and map fields are reference-backed containers in V, so
+		// they break recursion cycles
+		if fld.label == .repeated || fld.is_map {
 			continue
 		}
 		if v_scalar_type(fld.typ) != '' {
@@ -379,7 +411,9 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 		for fld in m.fields {
 			info := g.field_info(scope, vname, fld)!
 			mut t := info.vtype
-			if fld.label == .repeated {
+			if fld.is_map {
+				t = 'map[${v_scalar_type(fld.key_typ)}]${t}'
+			} else if fld.label == .repeated {
 				t = '[]${t}'
 			} else if fld.label == .optional || info.kind == .message {
 				t = '?${t}'
@@ -450,6 +484,25 @@ fn (mut g Gen) emit_encode_field(mut b strings.Builder, scope []string, vname st
 	info := g.field_info(scope, vname, fld)!
 	name := sanitize(fld.name)
 	n := fld.number
+	if fld.is_map {
+		val_write := match info.kind {
+			.scalar { 'e.${tagged_writer(fld.typ)}(2, v)' }
+			.enum_ { 'e.write_int32_field(2, int(v))' }
+			.message { 'e.write_tag(2, .len_delim)\n\t\t\te.write_varint(u64(v.encoded_size()))\n\t\t\tv.encode_to(mut e)' }
+		}
+		b.writeln('\tif m.${name}.len > 0 {')
+		b.writeln('\t\tmut ${name}_keys := m.${name}.keys()')
+		b.writeln('\t\t${name}_keys.sort()')
+		b.writeln('\t\tfor k in ${name}_keys {')
+		b.writeln('\t\t\tv := m.${name}[k]')
+		b.writeln('\t\t\te.write_tag(${n}, .len_delim)')
+		b.writeln('\t\t\te.write_varint(u64(${map_entry_size_expr(fld, info)}))')
+		b.writeln('\t\t\te.${tagged_writer(fld.key_typ)}(1, k)')
+		b.writeln('\t\t\t${val_write}')
+		b.writeln('\t\t}')
+		b.writeln('\t}')
+		return
+	}
 	if fld.label == .repeated {
 		if info.kind == .message {
 			b.writeln('\tfor v in m.${name} {')
@@ -546,6 +599,14 @@ fn (mut g Gen) emit_size_field(mut b strings.Builder, scope []string, vname stri
 	info := g.field_info(scope, vname, fld)!
 	name := sanitize(fld.name)
 	n := fld.number
+	if fld.is_map {
+		// fixed-width scalar values never reference v in the size expr
+		vvar := if info.kind == .scalar && packed_elem_width(fld.typ) > 0 { '_' } else { 'v' }
+		b.writeln('\tfor k, ${vvar} in m.${name} {')
+		b.writeln('\t\tn += protobuf.len_field_len(${n}, ${map_entry_size_expr(fld, info)})')
+		b.writeln('\t}')
+		return
+	}
 	if fld.label == .repeated {
 		if info.kind == .message {
 			b.writeln('\tfor v in m.${name} {')
@@ -628,6 +689,37 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 	info := g.field_info(scope, vname, fld)!
 	name := sanitize(fld.name)
 	n := fld.number
+	if fld.is_map {
+		val_zero := match info.kind {
+			.scalar { zero_literal(fld.typ) }
+			.enum_ { 'unsafe { ${info.vtype}(0) }' }
+			.message { '${info.vtype}{}' }
+		}
+		val_read := match info.kind {
+			.scalar { 'sub.${scalar_reader(fld.typ)}()!' }
+			.enum_ { 'unsafe { ${info.vtype}(sub.read_int32()!) }' }
+			.message { '${info.vtype}.decode(sub.read_bytes()!)!' }
+		}
+		// missing key or value fields fall back to zero values; last entry
+		// wins on duplicate keys, both per the proto3 spec
+		b.writeln('\t\t\t${n} {')
+		b.writeln('\t\t\t\tmut sub := protobuf.Decoder{')
+		b.writeln('\t\t\t\t\tbuf: d.read_bytes()!')
+		b.writeln('\t\t\t\t}')
+		b.writeln('\t\t\t\tmut mk := ${zero_literal(fld.key_typ)}')
+		b.writeln('\t\t\t\tmut mv := ${val_zero}')
+		b.writeln('\t\t\t\tfor sub.more() {')
+		b.writeln('\t\t\t\t\tmf, mw := sub.read_tag()!')
+		b.writeln('\t\t\t\t\tmatch mf {')
+		b.writeln('\t\t\t\t\t\t1 { mk = sub.${scalar_reader(fld.key_typ)}()! }')
+		b.writeln('\t\t\t\t\t\t2 { mv = ${val_read} }')
+		b.writeln('\t\t\t\t\t\telse { sub.skip(mw)! }')
+		b.writeln('\t\t\t\t\t}')
+		b.writeln('\t\t\t\t}')
+		b.writeln('\t\t\t\tm.${name}[mk] = mv')
+		b.writeln('\t\t\t}')
+		return
+	}
 	if fld.label == .repeated {
 		if info.kind == .message {
 			b.writeln('\t\t\t${n} {')

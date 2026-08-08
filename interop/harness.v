@@ -132,12 +132,66 @@ fn gen_scalars(mut r Rng) Scalars {
 			s.rn << gen_nested(mut r)
 		}
 	}
+	if r.chance(50) {
+		for _ in 0 .. r.below(4) {
+			s.mi[r.i32val()] = r.i32val()
+		}
+	}
+	if r.chance(50) {
+		for _ in 0 .. r.below(4) {
+			s.ms[r.strval()] = r.strval()
+		}
+	}
+	if r.chance(40) {
+		for _ in 0 .. r.below(3) {
+			s.mn[r.strval()] = gen_nested(mut r)
+		}
+	}
+	if r.chance(40) {
+		for _ in 0 .. r.below(3) {
+			s.mc[tricky_u32[r.below(tricky_u32.len)]] = unsafe { Color(r.below(4)) }
+		}
+	}
+	if r.chance(40) {
+		for _ in 0 .. r.below(3) {
+			s.mb[r.i64val()] = r.chance(50)
+		}
+	}
 	return s
 }
 
 // Every field at an extreme value, plus an intentionally empty nested
 // message in rn (empty messages still encode as LEN 0 under proto3).
 fn known_scalars() Scalars {
+	mut s := known_scalars_base()
+	// map extremes: zero key + zero value entries still encode both fields,
+	// empty message values encode as LEN 0, i64 min/max keys sort signed
+	s.mi = {
+		-2147483648: -1
+		0:           0
+		2147483647:  150
+	}
+	s.ms = {
+		'':  ''
+		'k': 'héllo'
+	}
+	s.mn = {
+		'a': Nested{}
+		'b': Nested{
+			name: 'x'
+			num:  -1
+		}
+	}
+	s.mc = {
+		u32(0):          Color.blue
+		u32(4294967295): Color.color_unspecified
+	}
+	s.mb[i64(-9223372036854775807) - 1] = true
+	s.mb[i64(9223372036854775807)] = false
+	return s
+}
+
+fn known_scalars_base() Scalars {
 	return Scalars{
 		a:      -1
 		b:      i64(-9223372036854775807) - 1

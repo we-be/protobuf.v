@@ -88,6 +88,11 @@ pub mut:
 	rs     []string
 	nested ?Nested
 	rn     []Nested
+	mi     map[int]int
+	ms     map[string]string
+	mn     map[string]Nested
+	mc     map[u32]Color
+	mb     map[i64]bool
 }
 
 pub fn (m &Scalars) encoded_size() int {
@@ -155,6 +160,26 @@ pub fn (m &Scalars) encoded_size() int {
 	}
 	for v in m.rn {
 		n += protobuf.len_field_len(20, v.encoded_size())
+	}
+	for k, v in m.mi {
+		n += protobuf.len_field_len(21, protobuf.tag_len(1) + protobuf.varint_len(u64(i64(k))) +
+			protobuf.tag_len(2) + protobuf.varint_len(u64(i64(v))))
+	}
+	for k, v in m.ms {
+		n += protobuf.len_field_len(22, protobuf.len_field_len(1, k.len) +
+			protobuf.len_field_len(2, v.len))
+	}
+	for k, v in m.mn {
+		n += protobuf.len_field_len(23, protobuf.len_field_len(1, k.len) +
+			protobuf.len_field_len(2, v.encoded_size()))
+	}
+	for k, v in m.mc {
+		n += protobuf.len_field_len(24, protobuf.tag_len(1) + protobuf.varint_len(u64(k)) +
+			protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(v)))))
+	}
+	for k, _ in m.mb {
+		n += protobuf.len_field_len(25, protobuf.tag_len(1) +
+			protobuf.varint_len(protobuf.zigzag_encode(k)) + protobuf.tag_len(2) + 1)
 	}
 	return n
 }
@@ -231,6 +256,67 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 		e.write_tag(20, .len_delim)
 		e.write_varint(u64(v.encoded_size()))
 		v.encode_to(mut e)
+	}
+	if m.mi.len > 0 {
+		mut mi_keys := m.mi.keys()
+		mi_keys.sort()
+		for k in mi_keys {
+			v := m.mi[k]
+			e.write_tag(21, .len_delim)
+			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(u64(i64(k))) +
+				protobuf.tag_len(2) + protobuf.varint_len(u64(i64(v)))))
+			e.write_int32_field(1, k)
+			e.write_int32_field(2, v)
+		}
+	}
+	if m.ms.len > 0 {
+		mut ms_keys := m.ms.keys()
+		ms_keys.sort()
+		for k in ms_keys {
+			v := m.ms[k]
+			e.write_tag(22, .len_delim)
+			e.write_varint(u64(protobuf.len_field_len(1, k.len) + protobuf.len_field_len(2, v.len)))
+			e.write_string_field(1, k)
+			e.write_string_field(2, v)
+		}
+	}
+	if m.mn.len > 0 {
+		mut mn_keys := m.mn.keys()
+		mn_keys.sort()
+		for k in mn_keys {
+			v := m.mn[k]
+			e.write_tag(23, .len_delim)
+			e.write_varint(u64(protobuf.len_field_len(1, k.len) +
+				protobuf.len_field_len(2, v.encoded_size())))
+			e.write_string_field(1, k)
+			e.write_tag(2, .len_delim)
+			e.write_varint(u64(v.encoded_size()))
+			v.encode_to(mut e)
+		}
+	}
+	if m.mc.len > 0 {
+		mut mc_keys := m.mc.keys()
+		mc_keys.sort()
+		for k in mc_keys {
+			v := m.mc[k]
+			e.write_tag(24, .len_delim)
+			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(u64(k)) +
+				protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(v))))))
+			e.write_uint32_field(1, k)
+			e.write_int32_field(2, int(v))
+		}
+	}
+	if m.mb.len > 0 {
+		mut mb_keys := m.mb.keys()
+		mb_keys.sort()
+		for k in mb_keys {
+			v := m.mb[k]
+			e.write_tag(25, .len_delim)
+			e.write_varint(u64(protobuf.tag_len(1) +
+				protobuf.varint_len(protobuf.zigzag_encode(k)) + protobuf.tag_len(2) + 1))
+			e.write_sint64_field(1, k)
+			e.write_bool_field(2, v)
+		}
 	}
 }
 
@@ -318,6 +404,86 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 			}
 			20 {
 				m.rn << Nested.decode(d.read_bytes()!)!
+			}
+			21 {
+				mut sub := protobuf.Decoder{
+					buf: d.read_bytes()!
+				}
+				mut mk := 0
+				mut mv := 0
+				for sub.more() {
+					mf, mw := sub.read_tag()!
+					match mf {
+						1 { mk = sub.read_int32()! }
+						2 { mv = sub.read_int32()! }
+						else { sub.skip(mw)! }
+					}
+				}
+				m.mi[mk] = mv
+			}
+			22 {
+				mut sub := protobuf.Decoder{
+					buf: d.read_bytes()!
+				}
+				mut mk := ''
+				mut mv := ''
+				for sub.more() {
+					mf, mw := sub.read_tag()!
+					match mf {
+						1 { mk = sub.read_string()! }
+						2 { mv = sub.read_string()! }
+						else { sub.skip(mw)! }
+					}
+				}
+				m.ms[mk] = mv
+			}
+			23 {
+				mut sub := protobuf.Decoder{
+					buf: d.read_bytes()!
+				}
+				mut mk := ''
+				mut mv := Nested{}
+				for sub.more() {
+					mf, mw := sub.read_tag()!
+					match mf {
+						1 { mk = sub.read_string()! }
+						2 { mv = Nested.decode(sub.read_bytes()!)! }
+						else { sub.skip(mw)! }
+					}
+				}
+				m.mn[mk] = mv
+			}
+			24 {
+				mut sub := protobuf.Decoder{
+					buf: d.read_bytes()!
+				}
+				mut mk := u32(0)
+				mut mv := unsafe { Color(0) }
+				for sub.more() {
+					mf, mw := sub.read_tag()!
+					match mf {
+						1 { mk = sub.read_uint32()! }
+						2 { mv = unsafe { Color(sub.read_int32()!) } }
+						else { sub.skip(mw)! }
+					}
+				}
+				m.mc[mk] = mv
+			}
+			25 {
+				mut sub := protobuf.Decoder{
+					buf: d.read_bytes()!
+				}
+				mut mk := i64(0)
+				mut mv := false
+				for sub.more() {
+					mf, mw := sub.read_tag()!
+					match mf {
+						1 { mk = sub.read_sint64()! }
+						2 { mv = sub.read_bool()! }
+						else { sub.skip(mw)! }
+					}
+				}
+				m.mb[mk] = mv
 			}
 			else {
 				d.skip(wt)!

@@ -64,7 +64,7 @@ fn test_parse_repo_protos() ! {
 	scalars := parse(os.read_file(os.join_path(root, 'interop', 'scalars.proto'))!)!
 	assert scalars.messages.len == 2
 	assert scalars.messages[1].name == 'Scalars'
-	assert scalars.messages[1].fields.len == 20
+	assert scalars.messages[1].fields.len == 25
 	assert scalars.enums[0].name == 'Color'
 
 	book :=
@@ -86,7 +86,16 @@ fn test_rejections() {
 	expect_parse_error('syntax = "proto2"; message M {}', 'only proto3')
 	expect_parse_error('syntax = "proto3"; import "other.proto";', 'import')
 	expect_parse_error('syntax = "proto3"; message M { oneof x { int32 a = 1; } }', 'oneof')
-	expect_parse_error('syntax = "proto3"; message M { map<string, int32> m = 1; }', 'map')
+	expect_parse_error('syntax = "proto3"; message M { repeated map<string, int32> m = 1; }',
+		'cannot be repeated')
+	expect_parse_error('syntax = "proto3"; message M { map<bool, int32> m = 1; }',
+		'cannot key on bool')
+	expect_parse_error('syntax = "proto3"; message M { map<float, int32> m = 1; }',
+		'invalid map key type')
+	expect_parse_error('syntax = "proto3"; message M { map<bytes, int32> m = 1; }',
+		'invalid map key type')
+	expect_parse_error('syntax = "proto3"; message M { map<string, map<string, int32>> m = 1; }',
+		'cannot be maps')
 	expect_parse_error('syntax = "proto3"; message M { required int32 a = 1; }', 'proto2')
 	expect_parse_error('syntax = "proto3"; message M { int32 a = 1; int64 b = 1; }',
 		'duplicate field number')
@@ -104,6 +113,23 @@ service CodegenService {
 message GenerateRequest { int32 x = 1; }')!
 	assert f.messages.len == 1
 	assert f.messages[0].name == 'GenerateRequest'
+}
+
+fn test_map_fields() ! {
+	f := parse('syntax = "proto3"; message M {
+	map<string, int32> tags = 1;
+	map<sint64, Nested> refs = 2;
+	message Nested { int32 x = 1; }
+}')!
+	m := f.messages[0]
+	assert m.fields.len == 2
+	assert m.fields[0].is_map
+	assert m.fields[0].key_typ == 'string'
+	assert m.fields[0].typ == 'int32'
+	assert m.fields[0].label == .plain
+	assert m.fields[1].key_typ == 'sint64'
+	assert m.fields[1].typ == 'Nested'
+	assert m.fields[1].number == 2
 }
 
 fn test_enum_negative_and_options() ! {

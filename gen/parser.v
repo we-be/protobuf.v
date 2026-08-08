@@ -1,8 +1,8 @@
 module gen
 
-// proto3 subset parser: syntax, package, message, enum, scalar/repeated
+// proto3 subset parser: syntax, package, message, enum, scalar/repeated/map
 // fields, nested messages/enums, reserved/option skipping. Unsupported
-// constructs (import, oneof, map, services, proto2-isms) error loudly
+// constructs (import, oneof, services, proto2-isms) error loudly
 // rather than mis-parse.
 
 pub struct File {
@@ -46,7 +46,14 @@ pub mut:
 	number     int
 	has_packed bool // explicit [packed=...] option present
 	packed     bool
+	is_map     bool
+	key_typ    string // map key type; typ holds the value type
 }
+
+// integral and string types; proto3 also allows bool, but V maps cannot
+// key on bool, so it is rejected at parse
+const map_key_types = ['int32', 'int64', 'uint32', 'uint64', 'sint32', 'sint64', 'fixed32', 'fixed64',
+	'sfixed32', 'sfixed64', 'string']
 
 enum TokenKind {
 	ident
@@ -305,9 +312,6 @@ fn (mut p Parser) parse_message() !Message {
 			'oneof' {
 				return error('line ${t.line}: oneof is not supported yet')
 			}
-			'map' {
-				return error('line ${t.line}: map fields are not supported yet')
-			}
 			'extensions', 'extend', 'group' {
 				return error('line ${t.line}: `${t.lit}` is proto2-only and not supported')
 			}
@@ -342,9 +346,29 @@ fn (mut p Parser) parse_field() !Field {
 		return error('line ${t.line}: expected field type, got `${t.lit}`')
 	}
 	if t.lit == 'map' {
-		return error('line ${t.line}: map fields are not supported yet')
+		if fld.label != .plain {
+			return error('line ${t.line}: map fields cannot be repeated or optional')
+		}
+		p.expect_punct('<')!
+		kt := p.expect_ident()!
+		if kt.lit == 'bool' {
+			return error('line ${kt.line}: map<bool, ...> is not supported (V maps cannot key on bool)')
+		}
+		if kt.lit !in map_key_types {
+			return error('line ${kt.line}: invalid map key type `${kt.lit}`')
+		}
+		p.expect_punct(',')!
+		vt := p.expect_ident()!
+		if vt.lit == 'map' {
+			return error('line ${vt.line}: map values cannot be maps')
+		}
+		p.expect_punct('>')!
+		fld.is_map = true
+		fld.key_typ = kt.lit
+		fld.typ = vt.lit
+	} else {
+		fld.typ = t.lit
 	}
-	fld.typ = t.lit
 	fld.name = p.expect_ident()!.lit
 	p.expect_punct('=')!
 	num := p.next()

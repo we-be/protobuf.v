@@ -25,8 +25,8 @@ Why: V has no maintained protobuf library — [vproto](https://github.com/emily3
 - [x] Decoder fuzzing: 17k random/mutated buffers, errors only, no crashes
 - [x] PoC app: [examples/addressbook](examples/addressbook) — CLI whose data file protoc reads natively, and vice versa
 - [x] `.proto` → V codegen (`cmd/vpbgen`): messages, nested types, enums, repeated/packed, `optional` — validated against protoc by the same byte oracle
-- [ ] maps + oneof
-- [ ] sqlc process-plugin PoC (protobuf `CodeGenRequest`/`CodeGenResponse` over stdin/stdout)
+- [x] `map<K, V>` fields → `map[K]V` (`map<bool, ...>` is rejected: V maps cannot key on bool)
+- [ ] oneof
 
 ## Usage
 
@@ -36,7 +36,7 @@ Generate V code from a `.proto` file:
 v run cmd/vpbgen -m main -o person_pb.v person.proto
 ```
 
-Every message becomes a struct with `encode() []u8` and a static `decode(buf) !T`. Proto3 semantics carry over: `optional` scalars and singular message fields map to `?T` (absent ≠ zero), enums are open (unknown values survive roundtrips), repeated scalars are packed unless `[packed = false]`.
+Every message becomes a struct with `encode() []u8` and a static `decode(buf) !T`. Proto3 semantics carry over: `optional` scalars and singular message fields map to `?T` (absent ≠ zero), enums are open (unknown values survive roundtrips), repeated scalars are packed unless `[packed = false]`, and `map<K, V>` fields become `map[K]V` (entries serialize sorted by key, so encoding is deterministic).
 
 The generated code is exactly this shape, which you can also write by hand against the wire runtime:
 

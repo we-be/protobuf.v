@@ -36,4 +36,9 @@ message Scalars {
   repeated string rs = 18;
   Nested nested = 19;
   repeated Nested rn = 20;
+  map<int32, int32> mi = 21;
+  map<string, string> ms = 22;
+  map<string, Nested> mn = 23;
+  map<uint32, Color> mc = 24;
+  map<sint64, bool> mb = 25;
 }

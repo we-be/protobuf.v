@@ -27,6 +27,10 @@ message Person {
 	repeated int32 unpacked = 11 [packed = false];
 	sint64 delta = 12;
 	fixed32 checksum = 13;
+	map<string, int32> attrs = 14;
+	map<int32, Address> places = 15;
+	map<uint64, PersonKind> kinds = 16;
+	map<string, bool> flags = 17;
 
 	message Address {
 		string street = 1;
@@ -55,17 +59,44 @@ fn main() {
 		unpacked: [7, 8]
 		delta:    -123456789
 		checksum: 42
+		attrs:    {
+			'x': 1
+			'':  0
+		}
+		places:   {
+			3:  Person_Address{
+				street: 'p'
+			}
+			-2: Person_Address{}
+		}
+		kinds:    {
+			u64(5): PersonKind.person_kind_user
+			u64(9): PersonKind.person_kind_unspecified
+		}
+		flags:    {
+			't': true
+			'f': false
+		}
 	}
 	enc := p.encode()
 	q := Person.decode(enc) or { panic(err) }
 	assert q == p
 	// re-encode must be byte-identical
 	assert q.encode() == enc
+	// insertion order must not leak into the encoding: same entries,
+	// reversed insertion, identical bytes
+	mut p2 := p
+	p2.attrs = {
+		'':  0
+		'x': 1
+	}
+	assert p2.encode() == enc
 	// empty message: absent optional stays none, absent submessage stays none
 	r := Person.decode(Person{}.encode()) or { panic(err) }
 	assert r == Person{}
 	assert r.opt_rank == none
 	assert r.home == none
+	assert r.attrs.len == 0
 	println('ROUNDTRIP OK')
 }
 "
@@ -85,6 +116,10 @@ fn test_generate_structure() ! {
 	assert code.contains('addrs []Person_Address')
 	assert code.contains('delta i64')
 	assert code.contains('checksum u32')
+	assert code.contains('attrs map[string]int')
+	assert code.contains('places map[int]Person_Address')
+	assert code.contains('kinds map[u64]PersonKind')
+	assert code.contains('flags map[string]bool')
 }
 
 fn test_generated_roundtrip() ! {
@@ -127,4 +162,10 @@ fn test_repeated_self_reference_is_fine() ! {
 	f := parse('syntax = "proto3"; message Node { int32 val = 1; repeated Node children = 2; }')!
 	code := generate(f, GenOpts{})!
 	assert code.contains('children []Node')
+}
+
+fn test_map_self_reference_is_fine() ! {
+	f := parse('syntax = "proto3"; message Node { int32 val = 1; map<string, Node> kids = 2; }')!
+	code := generate(f, GenOpts{})!
+	assert code.contains('kids map[string]Node')
 }
