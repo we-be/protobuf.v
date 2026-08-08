@@ -67,6 +67,27 @@ fn build_book(n int) AddressBook {
 			cv := i64(r.next() % 100000) - 50000
 			p.counters[ck] = cv
 		}
+		if (r.next() & 1) == 1 {
+			ss := i64(r.next() % 4000000000)
+			nn := int(r.next() % 1000000000)
+			p.seen_at = GoogleProtobuf_Timestamp{
+				seconds: ss
+				nanos:   nn
+			}
+		}
+		match r.next() % 3 {
+			0 {
+				p.contact = Person_Handle{
+					value: 'h' + (r.next() % 1000).str()
+				}
+			}
+			1 {
+				p.contact = Person_Ext{
+					value: i64(r.next() % 1000000)
+				}
+			}
+			else {}
+		}
 		people << p
 	}
 	return AddressBook{

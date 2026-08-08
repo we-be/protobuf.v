@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package bench;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "example.com/pbbench/bench";
 
 enum PhoneType {
@@ -27,6 +29,11 @@ message Person {
   repeated int64 tags = 8;
   map<string, string> metadata = 9;
   map<int32, int64> counters = 10;
+  google.protobuf.Timestamp seen_at = 11;
+  oneof contact {
+    string handle = 12;
+    int64 ext = 13;
+  }
 }
 
 message AddressBook {

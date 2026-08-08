@@ -115,11 +115,11 @@ From a local run (Go 1.26, protobuf-go v1.36.11, V `-prod`; V/Go time, lower = V
 
 | payload | encode | decode |
 |---|---|---|
-| 86 B | 0.35 | 0.72 |
-| 14 KB | 0.52 | 0.64 |
-| 1.5 MB | 0.79 | 0.79 |
+| 86 B | 0.28 | 0.51 |
+| 15 KB | 0.35 | 0.49 |
+| 1.6 MB | 0.58 | 0.55 |
 
-Encode and decode both beat Go at every size (schema includes map fields). This relies on the single-pass `encoded_size()`/`encode_to()` design, `&` receivers on generated methods, and a decode path that borrows sub-buffers (`read_view`) instead of cloning them — an earlier draft with by-value receivers and per-submessage buffers was 243× slower than Go on the large encode, and clone-per-submessage decoding was 40% slower than the current path.
+Encode and decode both beat Go at every size — the schema exercises maps, a oneof, and a `google.protobuf.Timestamp` submessage, and the gap *widened* when those were added (Go pays a pointer allocation per submessage and an interface box per oneof; V's inline structs and boxed sum types don't). This relies on the single-pass `encoded_size()`/`encode_to()` design, `&` receivers on generated methods, and a decode path that borrows sub-buffers (`read_view`) instead of cloning them — an earlier draft with by-value receivers and per-submessage buffers was 243× slower than Go on the large encode, and clone-per-submessage decoding was 40% slower than the current path.
 
 ## Example
 

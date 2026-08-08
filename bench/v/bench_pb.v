@@ -2,6 +2,7 @@
 module main
 
 import protobuf
+import time
 
 pub enum PhoneType {
 	phone_type_unspecified = 0
@@ -66,6 +67,18 @@ pub fn PhoneNumber.decode(buf []u8) !PhoneNumber {
 	return m
 }
 
+pub struct Person_Handle {
+pub mut:
+	value string
+}
+
+pub struct Person_Ext {
+pub mut:
+	value i64
+}
+
+pub type Person_Contact = Person_Handle | Person_Ext
+
 pub struct Person {
 pub mut:
 	name      string
@@ -78,6 +91,8 @@ pub mut:
 	tags      []i64
 	metadata  map[string]string
 	counters  map[int]i64
+	seen_at   ?GoogleProtobuf_Timestamp
+	contact   ?Person_Contact
 }
 
 pub fn (m &Person) encoded_size() int {
@@ -117,6 +132,19 @@ pub fn (m &Person) encoded_size() int {
 	for k, v in m.counters {
 		n += protobuf.len_field_len(10, protobuf.tag_len(1) + protobuf.varint_len(u64(i64(k))) +
 			protobuf.tag_len(2) + protobuf.varint_len(u64(v)))
+	}
+	if seen_at := m.seen_at {
+		n += protobuf.len_field_len(11, seen_at.encoded_size())
+	}
+	if ov := m.contact {
+		if ov is Person_Handle {
+			n += protobuf.len_field_len(12, ov.value.len)
+		}
+	}
+	if ov := m.contact {
+		if ov is Person_Ext {
+			n += protobuf.tag_len(13) + protobuf.varint_len(u64(ov.value))
+		}
 	}
 	return n
 }
@@ -177,6 +205,21 @@ pub fn (m &Person) encode_to(mut e protobuf.Encoder) {
 				protobuf.tag_len(2) + protobuf.varint_len(u64(v))))
 			e.write_int32_field(1, k)
 			e.write_int64_field(2, v)
+		}
+	}
+	if seen_at := m.seen_at {
+		e.write_tag(11, .len_delim)
+		e.write_varint(u64(seen_at.encoded_size()))
+		seen_at.encode_to(mut e)
+	}
+	if ov := m.contact {
+		if ov is Person_Handle {
+			e.write_string_field(12, ov.value)
+		}
+	}
+	if ov := m.contact {
+		if ov is Person_Ext {
+			e.write_int64_field(13, ov.value)
 		}
 	}
 }
@@ -262,6 +305,19 @@ pub fn Person.decode(buf []u8) !Person {
 				}
 				m.counters[mk] = mv
 			}
+			11 {
+				m.seen_at = GoogleProtobuf_Timestamp.decode(d.read_view()!)!
+			}
+			12 {
+				m.contact = Person_Handle{
+					value: d.read_string()!
+				}
+			}
+			13 {
+				m.contact = Person_Ext{
+					value: d.read_int64()!
+				}
+			}
 			else {
 				d.skip(wt)!
 			}
@@ -316,4 +372,78 @@ pub fn AddressBook.decode(buf []u8) !AddressBook {
 		}
 	}
 	return m
+}
+
+pub struct GoogleProtobuf_Timestamp {
+pub mut:
+	seconds i64
+	nanos   int
+}
+
+pub fn (m &GoogleProtobuf_Timestamp) encoded_size() int {
+	mut n := 0
+	if m.seconds != 0 {
+		n += protobuf.tag_len(1) + protobuf.varint_len(u64(m.seconds))
+	}
+	if m.nanos != 0 {
+		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.nanos)))
+	}
+	return n
+}
+
+pub fn (m &GoogleProtobuf_Timestamp) encode_to(mut e protobuf.Encoder) {
+	if m.seconds != 0 {
+		e.write_int64_field(1, m.seconds)
+	}
+	if m.nanos != 0 {
+		e.write_int32_field(2, m.nanos)
+	}
+}
+
+pub fn (m &GoogleProtobuf_Timestamp) encode() []u8 {
+	mut e := protobuf.Encoder{
+		buf: []u8{cap: m.encoded_size()}
+	}
+	m.encode_to(mut e)
+	return e.buf
+}
+
+pub fn GoogleProtobuf_Timestamp.decode(buf []u8) !GoogleProtobuf_Timestamp {
+	mut m := GoogleProtobuf_Timestamp{}
+	mut d := protobuf.Decoder{
+		buf: buf
+	}
+	for d.more() {
+		field, wt := d.read_tag()!
+		match field {
+			1 {
+				m.seconds = d.read_int64()!
+			}
+			2 {
+				m.nanos = d.read_int32()!
+			}
+			else {
+				d.skip(wt)!
+			}
+		}
+	}
+	return m
+}
+
+// as_time converts to time.Time (UTC); out-of-spec nanos are clamped
+pub fn (m &GoogleProtobuf_Timestamp) as_time() time.Time {
+	mut n := m.nanos
+	if n < 0 {
+		n = 0
+	} else if n > 999_999_999 {
+		n = 999_999_999
+	}
+	return time.unix_nanosecond(m.seconds, n)
+}
+
+pub fn GoogleProtobuf_Timestamp.from_time(t time.Time) GoogleProtobuf_Timestamp {
+	return GoogleProtobuf_Timestamp{
+		seconds: t.unix()
+		nanos:   t.nanosecond
+	}
 }

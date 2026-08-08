@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	benchpb "example.com/pbbench/bench"
 )
@@ -73,6 +74,17 @@ func buildBook(n int) *benchpb.AddressBook {
 				p.Counters = map[int32]int64{}
 			}
 			p.Counters[ck] = cv
+		}
+		if (r.next() & 1) == 1 {
+			ss := int64(r.next() % 4000000000)
+			nn := int32(r.next() % 1000000000)
+			p.SeenAt = &timestamppb.Timestamp{Seconds: ss, Nanos: nn}
+		}
+		switch r.next() % 3 {
+		case 0:
+			p.Contact = &benchpb.Person_Handle{Handle: "h" + strconv.FormatUint(r.next()%1000, 10)}
+		case 1:
+			p.Contact = &benchpb.Person_Ext{Ext: int64(r.next() % 1000000)}
 		}
 		book.People = append(book.People, p)
 	}
