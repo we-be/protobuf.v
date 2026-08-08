@@ -698,13 +698,13 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 		val_read := match info.kind {
 			.scalar { 'sub.${scalar_reader(fld.typ)}()!' }
 			.enum_ { 'unsafe { ${info.vtype}(sub.read_int32()!) }' }
-			.message { '${info.vtype}.decode(sub.read_bytes()!)!' }
+			.message { '${info.vtype}.decode(sub.read_view()!)!' }
 		}
 		// missing key or value fields fall back to zero values; last entry
 		// wins on duplicate keys, both per the proto3 spec
 		b.writeln('\t\t\t${n} {')
 		b.writeln('\t\t\t\tmut sub := protobuf.Decoder{')
-		b.writeln('\t\t\t\t\tbuf: d.read_bytes()!')
+		b.writeln('\t\t\t\t\tbuf: d.read_view()!')
 		b.writeln('\t\t\t\t}')
 		b.writeln('\t\t\t\tmut mk := ${zero_literal(fld.key_typ)}')
 		b.writeln('\t\t\t\tmut mv := ${val_zero}')
@@ -723,7 +723,7 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 	if fld.label == .repeated {
 		if info.kind == .message {
 			b.writeln('\t\t\t${n} {')
-			b.writeln('\t\t\t\tm.${name} << ${info.vtype}.decode(d.read_bytes()!)!')
+			b.writeln('\t\t\t\tm.${name} << ${info.vtype}.decode(d.read_view()!)!')
 			b.writeln('\t\t\t}')
 			return
 		}
@@ -742,7 +742,7 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 			b.writeln('\t\t\t${n} {')
 			b.writeln('\t\t\t\tif wt == .len_delim {')
 			b.writeln('\t\t\t\t\tmut sub := protobuf.Decoder{')
-			b.writeln('\t\t\t\t\t\tbuf: d.read_bytes()!')
+			b.writeln('\t\t\t\t\t\tbuf: d.read_view()!')
 			b.writeln('\t\t\t\t\t}')
 			b.writeln('\t\t\t\t\tfor sub.more() {')
 			b.writeln('\t\t\t\t\t\tm.${name} << ${elem_sub}')
@@ -761,7 +761,7 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 	b.writeln('\t\t\t${n} {')
 	match info.kind {
 		.message {
-			b.writeln('\t\t\t\tm.${name} = ${info.vtype}.decode(d.read_bytes()!)!')
+			b.writeln('\t\t\t\tm.${name} = ${info.vtype}.decode(d.read_view()!)!')
 		}
 		.enum_ {
 			b.writeln('\t\t\t\tm.${name} = unsafe { ${info.vtype}(d.read_int32()!) }')

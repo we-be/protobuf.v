@@ -4,8 +4,9 @@ import math
 
 // Decoder walks a message buffer: read_tag, then a typed read per known
 // field, skip() for unknown ones. read_bytes returns a copy, so decoded
-// messages don't alias the input buffer. Nested messages and packed
-// repeated fields decode by looping a sub-Decoder over read_bytes output.
+// messages don't alias the input buffer. Nested messages, packed repeated
+// fields, and map entries decode by looping a sub-Decoder over read_view
+// output — borrowed, not copied, since leaf reads copy what they keep.
 pub struct Decoder {
 pub:
 	buf []u8
@@ -46,8 +47,10 @@ pub fn (mut d Decoder) read_tag() !(u32, WireType) {
 }
 
 pub fn (mut d Decoder) read_fixed32() !u32 {
-	b := d.read_exact(4)!
-	return u32(b[0]) | (u32(b[1]) << 8) | (u32(b[2]) << 16) | (u32(b[3]) << 24)
+	start := d.pos
+	d.advance(4)!
+	return u32(d.buf[start]) | (u32(d.buf[start + 1]) << 8) | (u32(d.buf[start + 2]) << 16) | (u32(d.buf[
+		start + 3]) << 24)
 }
 
 pub fn (mut d Decoder) read_fixed64() !u64 {
@@ -57,15 +60,26 @@ pub fn (mut d Decoder) read_fixed64() !u64 {
 }
 
 pub fn (mut d Decoder) read_bytes() ![]u8 {
+	return d.read_view()!.clone()
+}
+
+// read_view is read_bytes without the copy: the slice aliases the decoder's
+// buffer, so it must not outlive it. It exists for sub-decoding (nested
+// messages, packed fields, map entries), where every retained value makes
+// its own copy at the leaf anyway.
+pub fn (mut d Decoder) read_view() ![]u8 {
 	n := d.read_varint()!
 	if n > u64(d.buf.len - d.pos) {
 		return error('length ${n} exceeds remaining ${d.buf.len - d.pos} bytes')
 	}
-	return d.read_exact(int(n))
+	start := d.pos
+	d.advance(int(n))!
+	return d.buf[start..d.pos]
 }
 
 pub fn (mut d Decoder) read_string() !string {
-	return d.read_bytes()!.bytestr()
+	// bytestr copies, so the view never escapes
+	return d.read_view()!.bytestr()
 }
 
 // int32/int64 arrive sign-extended to 64 bits; truncation restores them.
@@ -141,8 +155,3 @@ fn (mut d Decoder) advance(n int) ! {
 	d.pos += n
 }
 
-fn (mut d Decoder) read_exact(n int) ![]u8 {
-	start := d.pos
-	d.advance(n)!
-	return d.buf[start..d.pos].clone()
-}

@@ -135,6 +135,8 @@ type Person struct {
 	Score         float64                `protobuf:"fixed64,6,opt,name=score,proto3" json:"score,omitempty"`
 	LastSeen      uint64                 `protobuf:"varint,7,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
 	Tags          []int64                `protobuf:"varint,8,rep,packed,name=tags,proto3" json:"tags,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,9,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Counters      map[int32]int64        `protobuf:"bytes,10,rep,name=counters,proto3" json:"counters,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -225,6 +227,20 @@ func (x *Person) GetTags() []int64 {
 	return nil
 }
 
+func (x *Person) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *Person) GetCounters() map[int32]int64 {
+	if x != nil {
+		return x.Counters
+	}
+	return nil
+}
+
 type AddressBook struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	People        []*Person              `protobuf:"bytes,1,rep,name=people,proto3" json:"people,omitempty"`
@@ -276,7 +292,7 @@ const file_bench_proto_rawDesc = "" +
 	"\vbench.proto\x12\x05bench\"K\n" +
 	"\vPhoneNumber\x12\x16\n" +
 	"\x06number\x18\x01 \x01(\tR\x06number\x12$\n" +
-	"\x04type\x18\x02 \x01(\x0e2\x10.bench.PhoneTypeR\x04type\"\xcd\x01\n" +
+	"\x04type\x18\x02 \x01(\x0e2\x10.bench.PhoneTypeR\x04type\"\xb9\x03\n" +
 	"\x06Person\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\x05R\x02id\x12\x14\n" +
@@ -285,7 +301,16 @@ const file_bench_proto_rawDesc = "" +
 	"\x06active\x18\x05 \x01(\bR\x06active\x12\x14\n" +
 	"\x05score\x18\x06 \x01(\x01R\x05score\x12\x1b\n" +
 	"\tlast_seen\x18\a \x01(\x04R\blastSeen\x12\x12\n" +
-	"\x04tags\x18\b \x03(\x03R\x04tags\"4\n" +
+	"\x04tags\x18\b \x03(\x03R\x04tags\x127\n" +
+	"\bmetadata\x18\t \x03(\v2\x1b.bench.Person.MetadataEntryR\bmetadata\x127\n" +
+	"\bcounters\x18\n" +
+	" \x03(\v2\x1b.bench.Person.CountersEntryR\bcounters\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a;\n" +
+	"\rCountersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"4\n" +
 	"\vAddressBook\x12%\n" +
 	"\x06people\x18\x01 \x03(\v2\r.bench.PersonR\x06people*h\n" +
 	"\tPhoneType\x12\x1a\n" +
@@ -307,22 +332,26 @@ func file_bench_proto_rawDescGZIP() []byte {
 }
 
 var file_bench_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_bench_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_bench_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_bench_proto_goTypes = []any{
 	(PhoneType)(0),      // 0: bench.PhoneType
 	(*PhoneNumber)(nil), // 1: bench.PhoneNumber
 	(*Person)(nil),      // 2: bench.Person
 	(*AddressBook)(nil), // 3: bench.AddressBook
+	nil,                 // 4: bench.Person.MetadataEntry
+	nil,                 // 5: bench.Person.CountersEntry
 }
 var file_bench_proto_depIdxs = []int32{
 	0, // 0: bench.PhoneNumber.type:type_name -> bench.PhoneType
 	1, // 1: bench.Person.phones:type_name -> bench.PhoneNumber
-	2, // 2: bench.AddressBook.people:type_name -> bench.Person
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	4, // 2: bench.Person.metadata:type_name -> bench.Person.MetadataEntry
+	5, // 3: bench.Person.counters:type_name -> bench.Person.CountersEntry
+	2, // 4: bench.AddressBook.people:type_name -> bench.Person
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_bench_proto_init() }
@@ -336,7 +365,7 @@ func file_bench_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_bench_proto_rawDesc), len(file_bench_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

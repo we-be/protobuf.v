@@ -107,11 +107,11 @@ From a local run (Go 1.26, protobuf-go v1.36.11, V `-prod`; V/Go time, lower = V
 
 | payload | encode | decode |
 |---|---|---|
-| 77 B | 0.49 | 0.69 |
-| 10 KB | 0.74 | 0.90 |
-| 1 MB | 0.75 | 1.03 |
+| 86 B | 0.35 | 0.72 |
+| 14 KB | 0.52 | 0.64 |
+| 1.5 MB | 0.79 | 0.79 |
 
-Encode beats Go at every size; decode sits at parity or better. This relies on the single-pass `encoded_size()`/`encode_to()` design plus `&` receivers on generated methods (see Design) — an earlier draft with by-value receivers and per-submessage buffers was 243× slower than Go on the 1 MB encode.
+Encode and decode both beat Go at every size (schema includes map fields). This relies on the single-pass `encoded_size()`/`encode_to()` design, `&` receivers on generated methods, and a decode path that borrows sub-buffers (`read_view`) instead of cloning them — an earlier draft with by-value receivers and per-submessage buffers was 243× slower than Go on the large encode, and clone-per-submessage decoding was 40% slower than the current path.
 
 ## Example
 

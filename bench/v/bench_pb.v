@@ -76,6 +76,8 @@ pub mut:
 	score     f64
 	last_seen u64
 	tags      []i64
+	metadata  map[string]string
+	counters  map[int]i64
 }
 
 pub fn (m &Person) encoded_size() int {
@@ -107,6 +109,14 @@ pub fn (m &Person) encoded_size() int {
 			p += protobuf.varint_len(u64(v))
 		}
 		n += protobuf.len_field_len(8, p)
+	}
+	for k, v in m.metadata {
+		n += protobuf.len_field_len(9, protobuf.len_field_len(1, k.len) +
+			protobuf.len_field_len(2, v.len))
+	}
+	for k, v in m.counters {
+		n += protobuf.len_field_len(10, protobuf.tag_len(1) + protobuf.varint_len(u64(i64(k))) +
+			protobuf.tag_len(2) + protobuf.varint_len(u64(v)))
 	}
 	return n
 }
@@ -146,6 +156,29 @@ pub fn (m &Person) encode_to(mut e protobuf.Encoder) {
 			e.write_varint(u64(v))
 		}
 	}
+	if m.metadata.len > 0 {
+		mut metadata_keys := m.metadata.keys()
+		metadata_keys.sort()
+		for k in metadata_keys {
+			v := m.metadata[k]
+			e.write_tag(9, .len_delim)
+			e.write_varint(u64(protobuf.len_field_len(1, k.len) + protobuf.len_field_len(2, v.len)))
+			e.write_string_field(1, k)
+			e.write_string_field(2, v)
+		}
+	}
+	if m.counters.len > 0 {
+		mut counters_keys := m.counters.keys()
+		counters_keys.sort()
+		for k in counters_keys {
+			v := m.counters[k]
+			e.write_tag(10, .len_delim)
+			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(u64(i64(k))) +
+				protobuf.tag_len(2) + protobuf.varint_len(u64(v))))
+			e.write_int32_field(1, k)
+			e.write_int64_field(2, v)
+		}
+	}
 }
 
 pub fn (m &Person) encode() []u8 {
@@ -174,7 +207,7 @@ pub fn Person.decode(buf []u8) !Person {
 				m.email = d.read_string()!
 			}
 			4 {
-				m.phones << PhoneNumber.decode(d.read_bytes()!)!
+				m.phones << PhoneNumber.decode(d.read_view()!)!
 			}
 			5 {
 				m.active = d.read_bool()!
@@ -188,7 +221,7 @@ pub fn Person.decode(buf []u8) !Person {
 			8 {
 				if wt == .len_delim {
 					mut sub := protobuf.Decoder{
-						buf: d.read_bytes()!
+						buf: d.read_view()!
 					}
 					for sub.more() {
 						m.tags << sub.read_int64()!
@@ -196,6 +229,38 @@ pub fn Person.decode(buf []u8) !Person {
 				} else {
 					m.tags << d.read_int64()!
 				}
+			}
+			9 {
+				mut sub := protobuf.Decoder{
+					buf: d.read_view()!
+				}
+				mut mk := ''
+				mut mv := ''
+				for sub.more() {
+					mf, mw := sub.read_tag()!
+					match mf {
+						1 { mk = sub.read_string()! }
+						2 { mv = sub.read_string()! }
+						else { sub.skip(mw)! }
+					}
+				}
+				m.metadata[mk] = mv
+			}
+			10 {
+				mut sub := protobuf.Decoder{
+					buf: d.read_view()!
+				}
+				mut mk := 0
+				mut mv := i64(0)
+				for sub.more() {
+					mf, mw := sub.read_tag()!
+					match mf {
+						1 { mk = sub.read_int32()! }
+						2 { mv = sub.read_int64()! }
+						else { sub.skip(mw)! }
+					}
+				}
+				m.counters[mk] = mv
 			}
 			else {
 				d.skip(wt)!
@@ -243,7 +308,7 @@ pub fn AddressBook.decode(buf []u8) !AddressBook {
 		field, wt := d.read_tag()!
 		match field {
 			1 {
-				m.people << Person.decode(d.read_bytes()!)!
+				m.people << Person.decode(d.read_view()!)!
 			}
 			else {
 				d.skip(wt)!

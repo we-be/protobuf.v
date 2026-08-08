@@ -25,6 +25,8 @@ message Person {
   double score = 6;
   uint64 last_seen = 7;
   repeated int64 tags = 8;
+  map<string, string> metadata = 9;
+  map<int32, int64> counters = 10;
 }
 
 message AddressBook {

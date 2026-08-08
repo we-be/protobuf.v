@@ -387,7 +387,7 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 			17 {
 				if wt == .len_delim {
 					mut sub := protobuf.Decoder{
-						buf: d.read_bytes()!
+						buf: d.read_view()!
 					}
 					for sub.more() {
 						m.rp << sub.read_int32()!
@@ -400,14 +400,14 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 				m.rs << d.read_string()!
 			}
 			19 {
-				m.nested = Nested.decode(d.read_bytes()!)!
+				m.nested = Nested.decode(d.read_view()!)!
 			}
 			20 {
-				m.rn << Nested.decode(d.read_bytes()!)!
+				m.rn << Nested.decode(d.read_view()!)!
 			}
 			21 {
 				mut sub := protobuf.Decoder{
-					buf: d.read_bytes()!
+					buf: d.read_view()!
 				}
 				mut mk := 0
 				mut mv := 0
@@ -423,7 +423,7 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 			}
 			22 {
 				mut sub := protobuf.Decoder{
-					buf: d.read_bytes()!
+					buf: d.read_view()!
 				}
 				mut mk := ''
 				mut mv := ''
@@ -439,7 +439,7 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 			}
 			23 {
 				mut sub := protobuf.Decoder{
-					buf: d.read_bytes()!
+					buf: d.read_view()!
 				}
 				mut mk := ''
 				mut mv := Nested{}
@@ -447,7 +447,7 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 					mf, mw := sub.read_tag()!
 					match mf {
 						1 { mk = sub.read_string()! }
-						2 { mv = Nested.decode(sub.read_bytes()!)! }
+						2 { mv = Nested.decode(sub.read_view()!)! }
 						else { sub.skip(mw)! }
 					}
 				}
@@ -455,7 +455,7 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 			}
 			24 {
 				mut sub := protobuf.Decoder{
-					buf: d.read_bytes()!
+					buf: d.read_view()!
 				}
 				mut mk := u32(0)
 				mut mv := unsafe { Color(0) }
@@ -471,7 +471,7 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 			}
 			25 {
 				mut sub := protobuf.Decoder{
-					buf: d.read_bytes()!
+					buf: d.read_view()!
 				}
 				mut mk := i64(0)
 				mut mv := false

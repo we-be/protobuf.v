@@ -56,6 +56,24 @@ func buildBook(n int) *benchpb.AddressBook {
 		for j := 0; j < ntags; j++ {
 			p.Tags = append(p.Tags, int64(r.next()%100000)-50000)
 		}
+		nmeta := int(r.next() % 4)
+		for j := 0; j < nmeta; j++ {
+			mk := "k" + strconv.FormatUint(r.next()%1000, 10)
+			mv := "v" + strconv.FormatUint(r.next()%1000, 10)
+			if p.Metadata == nil {
+				p.Metadata = map[string]string{}
+			}
+			p.Metadata[mk] = mv
+		}
+		ncnt := int(r.next() % 4)
+		for j := 0; j < ncnt; j++ {
+			ck := int32(r.next() % 1000)
+			cv := int64(r.next()%100000) - 50000
+			if p.Counters == nil {
+				p.Counters = map[int32]int64{}
+			}
+			p.Counters[ck] = cv
+		}
 		book.People = append(book.People, p)
 	}
 	return book

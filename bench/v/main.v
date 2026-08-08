@@ -54,6 +54,19 @@ fn build_book(n int) AddressBook {
 		for _ in 0 .. ntags {
 			p.tags << i64(r.next() % 100000) - 50000
 		}
+		// rng calls kept in explicit statement order so Go mirrors exactly
+		nmeta := int(r.next() % 4)
+		for _ in 0 .. nmeta {
+			mk := 'k' + (r.next() % 1000).str()
+			mv := 'v' + (r.next() % 1000).str()
+			p.metadata[mk] = mv
+		}
+		ncnt := int(r.next() % 4)
+		for _ in 0 .. ncnt {
+			ck := int(r.next() % 1000)
+			cv := i64(r.next() % 100000) - 50000
+			p.counters[ck] = cv
+		}
 		people << p
 	}
 	return AddressBook{
