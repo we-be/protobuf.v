@@ -122,6 +122,15 @@ receivers on generated methods, and a decode path that borrows sub-buffers
 (`read_view`) instead of cloning them. CI attaches a fresh benchmark
 report to every release.
 
+The ratios are hardware-dependent, and we say so rather than cherry-pick:
+on desktop cores (Zen 2 above, including pinned to 4 CPUs) V wins every
+cell, but on GitHub's shared Azure vCPUs encode stays ahead while
+allocation-heavy decode trails Go at ~1.2–1.5× — same code, same V
+version, different silicon. CI runs the full benchmark on every push with
+per-op regression gates calibrated to runner baselines, so a change that
+slows either path relative to Go fails the build; the table lands in each
+run's job summary.
+
 ## What generates to what
 
 | proto3 | V |

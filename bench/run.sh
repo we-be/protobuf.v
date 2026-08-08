@@ -73,22 +73,28 @@ gopb="$(sed -n 's|.*google.golang.org/protobuf \(v[0-9.]*\).*|\1|p' go/go.mod | 
 
 echo "wrote $out"
 
-# regression gate: with MAX_RATIO set, fail if any cell's V/Go time ratio
-# exceeds it. Ratios are same-run, same-box comparisons, so machine noise
-# largely cancels — a tripped gate means a real relative slowdown.
-if [ -n "${MAX_RATIO:-}" ]; then
-  viol="$(awk -F, -v max="$MAX_RATIO" '
+# regression gate: fail if a cell's V/Go time ratio exceeds its op's
+# threshold (MAX_ENCODE_RATIO / MAX_DECODE_RATIO, or MAX_RATIO for both).
+# Ratios are same-run, same-box comparisons, so machine noise largely
+# cancels — a tripped gate means a real relative slowdown. Baselines are
+# hardware-dependent: decode wins on desktop cores but trails Go on
+# cloud-runner Xeons, so the two ops get separate thresholds.
+enc_max="${MAX_ENCODE_RATIO:-${MAX_RATIO:-}}"
+dec_max="${MAX_DECODE_RATIO:-${MAX_RATIO:-}}"
+if [ -n "$enc_max" ] || [ -n "$dec_max" ]; then
+  viol="$(awk -F, -v encmax="${enc_max:-9999}" -v decmax="${dec_max:-9999}" '
     FNR == NR { vns[$2 "," $3] = $6; next }
     {
       k = $2 "," $3
       r = vns[k] / $6
+      max = ($2 == "encode") ? encmax : decmax
       if (r > max) printf "  %s n=%s: V/Go %.2f > %s\n", $2, $3, r, max
     }
   ' "$tmp/v.csv" "$tmp/go.csv")"
   if [ -n "$viol" ]; then
-    echo "PERF GATE FAILED (MAX_RATIO=$MAX_RATIO):"
+    echo "PERF GATE FAILED (encode<=${enc_max:-inf}, decode<=${dec_max:-inf}):"
     echo "$viol"
     exit 1
   fi
-  echo "perf gate OK: every cell within ${MAX_RATIO}x of Go"
+  echo "perf gate OK (encode<=${enc_max:-inf}, decode<=${dec_max:-inf})"
 fi
