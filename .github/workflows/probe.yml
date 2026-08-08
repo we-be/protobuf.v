@@ -1,0 +1,27 @@
+name: probe
+
+on:
+  push:
+    branches: [probe-i64-literal]
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: repo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+      - uses: vlang/setup-v@v1
+        with:
+          check-latest: true
+      - name: V version
+        run: v version
+      - name: Run probe tests
+        run: v test probe/
