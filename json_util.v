@@ -10,8 +10,56 @@ import strconv
 // numbers or strings, floats as numbers or "NaN"/"Infinity" strings,
 // bytes as standard or URL-safe base64.
 
+// deeper nesting than any real message, far below the ~10k depth where
+// json2's recursive parser segfaults (upstream issue)
+pub const json_max_depth = 1000
+
 pub fn json_parse(src string) !json2.Any {
+	json_precheck(src)!
 	return json2.decode[json2.Any](src)
+}
+
+// iterative structural pre-scan, guarding two json2 pathologies on
+// hostile input: its recursive parser segfaults around 10k nesting, and
+// an unterminated array inside an object (`{"a":[1,21`) loops forever.
+// Reject both classes before json2 sees them.
+fn json_precheck(src string) ! {
+	mut depth := 0
+	mut in_str := false
+	mut esc := false
+	for c in src {
+		if in_str {
+			if esc {
+				esc = false
+			} else if c == `\\` {
+				esc = true
+			} else if c == `"` {
+				in_str = false
+			}
+			continue
+		}
+		match c {
+			`"` {
+				in_str = true
+			}
+			`{`, `[` {
+				depth++
+				if depth > json_max_depth {
+					return error('protojson: nesting deeper than ${json_max_depth}')
+				}
+			}
+			`}`, `]` {
+				depth--
+				if depth < 0 {
+					return error('protojson: unbalanced brackets')
+				}
+			}
+			else {}
+		}
+	}
+	if depth != 0 || in_str {
+		return error('protojson: truncated document')
+	}
 }
 
 pub fn json_object(a json2.Any) !map[string]json2.Any {
@@ -75,16 +123,18 @@ pub fn json_intv(a json2.Any) !i64 {
 			return i64(a)
 		}
 		f64 {
+			// casting non-finite or out-of-range floats to i64 is UB in C
+			if math.is_nan(a) || math.is_inf(a, 0) || a < -9.223372036854776e18
+				|| a > 9.223372036854776e18 {
+				return error('protojson: number out of integer range')
+			}
 			if a != f64(i64(a)) {
 				return error('protojson: expected integer, got fraction')
 			}
 			return i64(a)
 		}
 		f32 {
-			if f64(a) != f64(i64(a)) {
-				return error('protojson: expected integer, got fraction')
-			}
-			return i64(a)
+			return json_intv(json2.Any(f64(a)))
 		}
 		string {
 			return json_key_i64(a)
@@ -117,16 +167,16 @@ pub fn json_uintv(a json2.Any) !u64 {
 			return u64(v)
 		}
 		f64 {
-			if a < 0 || a != f64(u64(a)) {
+			if math.is_nan(a) || math.is_inf(a, 0) || a < 0 || a > 1.8446744073709552e19 {
+				return error('protojson: number out of unsigned range')
+			}
+			if a != f64(u64(a)) {
 				return error('protojson: expected unsigned integer')
 			}
 			return u64(a)
 		}
 		f32 {
-			if a < 0 || f64(a) != f64(u64(a)) {
-				return error('protojson: expected unsigned integer')
-			}
-			return u64(a)
+			return json_uintv(json2.Any(f64(a)))
 		}
 		string {
 			return json_key_u64(a)
