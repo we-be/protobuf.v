@@ -49,8 +49,11 @@ pub fn (mut d Decoder) read_tag() !(u32, WireType) {
 pub fn (mut d Decoder) read_fixed32() !u32 {
 	start := d.pos
 	d.advance(4)!
-	return u32(d.buf[start]) | (u32(d.buf[start + 1]) << 8) | (u32(d.buf[start + 2]) << 16) | (u32(d.buf[
-		start + 3]) << 24)
+	mut v := u32(d.buf[start])
+	v |= u32(d.buf[start + 1]) << 8
+	v |= u32(d.buf[start + 2]) << 16
+	v |= u32(d.buf[start + 3]) << 24
+	return v
 }
 
 pub fn (mut d Decoder) read_fixed64() !u64 {
@@ -154,4 +157,3 @@ fn (mut d Decoder) advance(n int) ! {
 	}
 	d.pos += n
 }
-
