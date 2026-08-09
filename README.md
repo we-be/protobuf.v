@@ -15,8 +15,21 @@ Byte-exact against protoc, JSON-conformant against Go's protojson, and
 - **Canonical JSON** (protojson) with the spec's WKT special forms
 - **gRPC client + [Connect](https://connectrpc.com) server codegen** for
   [we-be/grpc.v](https://github.com/we-be/grpc.v)
-- **Four independent oracles** — protoc, protobuf-go's protojson, and (in
-  grpc.v's CI) live grpc-go and connect-go peers
+- **Passes the official protobuf conformance suite** — 1468/1468 applicable
+  proto3 cases, 0 unexpected failures (see [`conformance/`](conformance/))
+- **Recursive messages** (`descriptor.proto`-style self-references) and proto3
+  message-merge semantics
+- **Five independent oracles** — protoc, protobuf-go's protojson, the official
+  conformance runner, and (in grpc.v's CI) live grpc-go and connect-go peers
+
+## Stability
+
+**1.0 — the public API is stable and follows [SemVer](https://semver.org).** The
+contract covers the generated message surface (`encode`/`decode`/`json`/
+`from_json`/`to_any`/`as_time`…), the generated enums and oneof sum types, and
+`protobuf.Encoder`/`Decoder`/`WireType`/`zigzag_*`. The `protobuf.json_*` helpers
+are `pub` only so generated code can reach them across modules — they are
+runtime-internal and may change. See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Quickstart
 

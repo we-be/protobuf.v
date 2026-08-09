@@ -7,15 +7,14 @@ implementations).
 ## Result (proto3)
 
 ```
-CONFORMANCE SUITE PASSED: 1458 successes, 4134 skipped, 10 expected failures, 0 unexpected failures.
+CONFORMANCE SUITE PASSED: 1468 successes, 4134 skipped, 0 expected failures, 0 unexpected failures.
 ```
 
-- **1458 / 1468 applicable proto3 tests pass (99.3%).**
+- **All 1468 applicable proto3 tests pass (100%), 0 unexpected failures.**
 - **4134 skipped**: proto2, editions, and the text-format / JSPB wire formats —
   all documented non-goals; the testee returns `skipped` for them.
-- **10 expected failures**: out-of-range `Timestamp`/`Duration` that should fail
-  *JSON serialization*. `json()` is infallible by design, so these are listed in
-  `failure_list.txt` rather than fixed. See that file for the rationale.
+- A few *Recommended* (optional, non-gating) cases remain — see
+  `failure_list.txt` for the list; they surface only as warnings.
 
 ## Running it
 

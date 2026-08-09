@@ -1,25 +1,13 @@
-# Known conformance failures for protobuf.v (proto3).
+# Known conformance failures for protobuf.v (proto3): NONE.
 #
-# All ten are the same class: an out-of-range google.protobuf.Timestamp or
-# Duration that decodes fine from the wire but is NOT representable in
-# canonical protojson, so the reference implementation expects JSON
-# *serialization* to fail. protobuf.v's json() is infallible by design (it
-# returns a string, not a Result), so it emits a best-effort value instead of
-# erroring. Enforcing serialize-time range validation would require making the
-# entire JSON serialization path fallible; the values involved are exotic
-# (year > 9999, |duration| > ~10000 years), so this is a documented limitation
-# rather than a fix worth that churn.
+# Every applicable Required.Proto3 case passes:
+#   1468 successes, 4134 skipped, 0 expected failures, 0 unexpected failures.
+# Skipped = proto2, editions, text-format, and JSPB — all documented non-goals.
 #
-# Everything else in the proto3 suite passes: 1458 successes, 0 unexpected
-# failures. See README.md.
-
-Required.Proto3.TimestampProtoInputTooLarge.JsonOutput
-Required.Proto3.TimestampProtoInputTooSmall.JsonOutput
-Required.Proto3.TimestampProtoNanoTooLarge.JsonOutput
-Required.Proto3.TimestampProtoNegativeNanos.JsonOutput
-Required.Proto3.DurationProtoInputTooLarge.JsonOutput
-Required.Proto3.DurationProtoInputTooSmall.JsonOutput
-Required.Proto3.DurationProtoNanosTooLarge.JsonOutput
-Required.Proto3.DurationProtoNanosTooSmall.JsonOutput
-Required.Proto3.DurationProtoNanosWrongSign.JsonOutput
-Required.Proto3.DurationProtoNanosWrongSignNegativeSecs.JsonOutput
+# A handful of *Recommended* (optional, non-conformance-gating) cases are not
+# yet handled and surface only as warnings, not failures:
+#   - Value holding NaN/Infinity should fail JSON serialization (we emit the
+#     string spelling).
+#   - JSON_IGNORE_UNKNOWN parsing of unknown enum *string* names (we error).
+#   - FieldMask paths that don't round-trip should fail serialization.
+# These are candidates for a future release; none affect the Required suite.
