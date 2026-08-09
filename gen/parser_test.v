@@ -186,6 +186,11 @@ service S {
 	assert f.services[0].methods[0].server_streaming
 }
 
+fn test_editions_rejected_clearly() {
+	expect_parse_error('edition = "2023";
+message M { int32 x = 1; }', 'editions are not supported')
+}
+
 fn test_extend_still_rejected() {
 	expect_parse_error('syntax = "proto3"; extend google.protobuf.MethodOptions { string x = 1; }',
 		'extend')

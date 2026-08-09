@@ -306,6 +306,8 @@ pub fn parse(src string) !File {
 			return error('line ${s.line}: only proto3 is supported')
 		}
 		p.expect_punct(';')!
+	} else if t0.kind == .ident && t0.lit == 'edition' {
+		return error('proto editions are not supported; this library targets proto3')
 	} else {
 		return error('missing `syntax = "proto3";` declaration')
 	}
