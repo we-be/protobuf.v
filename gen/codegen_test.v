@@ -234,6 +234,40 @@ message Hollow {}')!
 	assert res.output.contains('UNKNOWN OK'), res.output
 }
 
+fn test_qualified_and_custom_option_codegen_e2e() ! {
+	// leading-dot + qualified types with custom options must not just
+	// parse — they must resolve and generate working code
+	f := parse('syntax = "proto3";
+package demo;
+message Inner { int32 v = 1; }
+message Outer {
+	.demo.Inner a = 1 [(google.api.field_behavior) = REQUIRED];
+	demo.Inner b = 2;
+}')!
+	code := generate(f, GenOpts{})!
+	assert code.contains('a ?Inner')
+	assert code.contains('b ?Inner')
+	dir := os.join_path(os.temp_dir(), 'vpbgen_qual_${os.getpid()}')
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.write_file(os.join_path(dir, 'q_pb.v'), code)!
+	os.write_file(os.join_path(dir, 'main.v'), "fn main() {
+	o := Outer{
+		a: Inner{ v: 7 }
+		b: Inner{ v: 9 }
+	}
+	q := Outer.decode(o.encode()) or { panic(err) }
+	assert q == o
+	println('QUAL OK')
+}")!
+	vexe := os.getenv_opt('VEXE') or { 'v' }
+	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	assert res.exit_code == 0, res.output
+	assert res.output.contains('QUAL OK'), res.output
+}
+
 fn test_deprecated_field_annotation() ! {
 	f := parse('syntax = "proto3"; message M {
 	int32 keep = 1;

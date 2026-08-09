@@ -217,14 +217,76 @@ fn (mut p Parser) expect_ident() !Token {
 	return t
 }
 
+// skip to the terminating `;`, honoring aggregate `{...}` option values
+// (which can themselves contain `;`); used for option/reserved statements
 fn (mut p Parser) skip_to_semi() ! {
+	mut depth := 0
 	for {
 		t := p.next()
 		if t.kind == .eof {
 			return error('line ${t.line}: unexpected EOF, missing `;`')
 		}
-		if t.kind == .punct && t.lit == ';' {
-			return
+		if t.kind == .punct {
+			match t.lit {
+				'{' {
+					depth++
+				}
+				'}' {
+					if depth > 0 { depth-- }
+				}
+				';' {
+					if depth == 0 { return }
+				}
+				else {}
+			}
+		}
+	}
+}
+
+// a (possibly fully-qualified) type name: an optional leading `.` for an
+// absolute reference, then dot-joined identifiers. The tokenizer keeps
+// dots inside a single ident, but a leading dot or a dot after whitespace
+// (a name split across lines) arrives as its own punct — stitch them back.
+fn (mut p Parser) parse_type_name() !string {
+	mut name := ''
+	if p.peek().kind == .punct && p.peek().lit == '.' {
+		p.next()
+		name = '.'
+	}
+	name += p.expect_ident()!.lit
+	for p.peek().kind == .punct && p.peek().lit == '.' {
+		p.next()
+		name += '.' + p.expect_ident()!.lit
+	}
+	return name
+}
+
+// consume one option value: an aggregate `{...}` or a scalar token
+// (with an optional leading `-` for negative numbers)
+fn (mut p Parser) skip_option_value() ! {
+	if p.peek().kind == .punct && p.peek().lit == '{' {
+		p.skip_braces()!
+		return
+	}
+	if p.peek().kind == .punct && p.peek().lit == '-' {
+		p.next()
+	}
+	p.next()
+}
+
+// consume a balanced { ... } starting at the current `{`
+fn (mut p Parser) skip_braces() ! {
+	p.expect_punct('{')!
+	mut depth := 1
+	for depth > 0 {
+		t := p.next()
+		if t.kind == .eof {
+			return error('line ${t.line}: unterminated `{` in option value')
+		}
+		if t.kind == .punct && t.lit == '{' {
+			depth++
+		} else if t.kind == .punct && t.lit == '}' {
+			depth--
 		}
 	}
 }
@@ -321,6 +383,11 @@ fn (mut p Parser) parse_message() !Message {
 			p.next()
 			continue
 		}
+		// a field whose type is an absolute reference starts with `.`
+		if t.kind == .punct && t.lit == '.' {
+			m.fields << p.parse_field()!
+			continue
+		}
 		if t.kind != .ident {
 			return error('line ${t.line}: unexpected `${t.lit}` in message ${m.name}')
 		}
@@ -395,22 +462,20 @@ fn (mut p Parser) parse_message() !Message {
 
 fn (mut p Parser) parse_field() !Field {
 	mut fld := Field{}
-	mut t := p.next()
-	if t.lit == 'repeated' {
+	lead := p.peek()
+	if lead.kind == .ident && lead.lit == 'repeated' {
 		fld.label = .repeated
-		t = p.next()
-	} else if t.lit == 'optional' {
+		p.next()
+	} else if lead.kind == .ident && lead.lit == 'optional' {
 		fld.label = .optional
-		t = p.next()
-	} else if t.lit == 'required' {
-		return error('line ${t.line}: `required` is proto2-only')
+		p.next()
+	} else if lead.kind == .ident && lead.lit == 'required' {
+		return error('line ${lead.line}: `required` is proto2-only')
 	}
-	if t.kind != .ident {
-		return error('line ${t.line}: expected field type, got `${t.lit}`')
-	}
-	if t.lit == 'map' {
+	if p.peek().kind == .ident && p.peek().lit == 'map' {
+		mt := p.next()
 		if fld.label != .plain {
-			return error('line ${t.line}: map fields cannot be repeated or optional')
+			return error('line ${mt.line}: map fields cannot be repeated or optional')
 		}
 		p.expect_punct('<')!
 		kt := p.expect_ident()!
@@ -421,16 +486,15 @@ fn (mut p Parser) parse_field() !Field {
 			return error('line ${kt.line}: invalid map key type `${kt.lit}`')
 		}
 		p.expect_punct(',')!
-		vt := p.expect_ident()!
-		if vt.lit == 'map' {
-			return error('line ${vt.line}: map values cannot be maps')
+		if p.peek().kind == .ident && p.peek().lit == 'map' {
+			return error('line ${p.peek().line}: map values cannot be maps')
 		}
+		fld.typ = p.parse_type_name()!
 		p.expect_punct('>')!
 		fld.is_map = true
 		fld.key_typ = kt.lit
-		fld.typ = vt.lit
 	} else {
-		fld.typ = t.lit
+		fld.typ = p.parse_type_name()!
 	}
 	fld.name = p.expect_ident()!.lit
 	p.expect_punct('=')!
@@ -445,24 +509,51 @@ fn (mut p Parser) parse_field() !Field {
 	mut t2 := p.next()
 	if t2.kind == .punct && t2.lit == '[' {
 		for {
-			key := p.expect_ident()!
-			p.expect_punct('=')!
-			val := p.next()
-			match key.lit {
-				'packed' {
-					fld.has_packed = true
-					fld.packed = val.lit == 'true'
-				}
-				'json_name' {
-					if val.kind != .str {
-						return error('line ${val.line}: json_name must be a string')
+			pk := p.peek()
+			if pk.kind == .punct && pk.lit == '(' {
+				// custom/extension option `(pkg.name)` optionally `.field` —
+				// pervasive in real protos (google.api.field_behavior, ...).
+				// We don't use it, just parse past name and value.
+				p.next() // (
+				for {
+					tk := p.next()
+					if tk.kind == .eof {
+						return error('line ${tk.line}: unterminated `(` in field option')
 					}
-					fld.json_name = val.lit
+					if tk.kind == .punct && tk.lit == ')' {
+						break
+					}
 				}
-				'deprecated' {
-					fld.deprecated = val.lit == 'true'
+				for p.peek().kind == .punct && p.peek().lit == '.' {
+					p.next()
+					p.expect_ident()!
 				}
-				else {} // unknown options (default, custom) are ignored, like protoc
+				p.expect_punct('=')!
+				p.skip_option_value()!
+			} else {
+				key := p.expect_ident()!
+				p.expect_punct('=')!
+				if p.peek().kind == .punct && p.peek().lit == '{' {
+					p.skip_braces()! // aggregate value on a known option name — skip
+				} else {
+					val := p.next()
+					match key.lit {
+						'packed' {
+							fld.has_packed = true
+							fld.packed = val.lit == 'true'
+						}
+						'json_name' {
+							if val.kind != .str {
+								return error('line ${val.line}: json_name must be a string')
+							}
+							fld.json_name = val.lit
+						}
+						'deprecated' {
+							fld.deprecated = val.lit == 'true'
+						}
+						else {} // other standard options ignored, like protoc
+					}
+				}
 			}
 			sep := p.next()
 			if sep.kind == .punct && sep.lit == ']' {
@@ -512,24 +603,22 @@ fn (mut p Parser) parse_service() !Service {
 			name: p.expect_ident()!.lit
 		}
 		p.expect_punct('(')!
-		mut it := p.expect_ident()!
-		if it.lit == 'stream' {
+		if p.peek().kind == .ident && p.peek().lit == 'stream' {
 			m.client_streaming = true
-			it = p.expect_ident()!
+			p.next()
 		}
-		m.input = it.lit
+		m.input = p.parse_type_name()!
 		p.expect_punct(')')!
 		ret := p.expect_ident()!
 		if ret.lit != 'returns' {
 			return error('line ${ret.line}: expected `returns`, got `${ret.lit}`')
 		}
 		p.expect_punct('(')!
-		mut ot := p.expect_ident()!
-		if ot.lit == 'stream' {
+		if p.peek().kind == .ident && p.peek().lit == 'stream' {
 			m.server_streaming = true
-			ot = p.expect_ident()!
+			p.next()
 		}
-		m.output = ot.lit
+		m.output = p.parse_type_name()!
 		p.expect_punct(')')!
 		t2 := p.next()
 		if t2.kind == .punct && t2.lit == '{' {

@@ -149,6 +149,48 @@ fn test_field_options() ! {
 	assert m.fields[3].json_name == '' // absent = derive
 }
 
+fn test_custom_options_and_qualified_types() ! {
+	// custom/extension options (bare, aggregate, negative) alongside a
+	// standard option; leading-dot and whitespace-split qualified types
+	f := parse('syntax = "proto3";
+package demo;
+message Inner { int32 v = 1; }
+message Outer {
+	option (google.api.resource) = { type: "x" pattern: "p/{id}" };
+	.demo.Inner a = 1 [(google.api.field_behavior) = REQUIRED, deprecated = true];
+	demo.Inner b = 2 [(x.y) = { a: 1 b { c: 2 } }, (n) = -5];
+}')!
+	outer := f.messages[1]
+	assert outer.fields.len == 2
+	assert outer.fields[0].typ == '.demo.Inner'
+	assert outer.fields[0].deprecated // standard option still captured past the custom one
+	assert outer.fields[1].typ == 'demo.Inner'
+}
+
+fn test_leading_dot_and_split_types() ! {
+	// type split across a line boundary (dot starts the continuation),
+	// and a leading-dot rpc type
+	f := parse('syntax = "proto3";
+message Req {}
+message Resp {}
+message M {
+	some.pkg.Outer
+		.Inner field = 1;
+}
+service S {
+	rpc Do (.Req) returns (stream .Resp);
+}')!
+	assert f.messages[2].fields[0].typ == 'some.pkg.Outer.Inner'
+	assert f.services[0].methods[0].input == '.Req'
+	assert f.services[0].methods[0].output == '.Resp'
+	assert f.services[0].methods[0].server_streaming
+}
+
+fn test_extend_still_rejected() {
+	expect_parse_error('syntax = "proto3"; extend google.protobuf.MethodOptions { string x = 1; }',
+		'extend')
+}
+
 fn test_json_name_must_be_string() {
 	expect_parse_error('syntax = "proto3"; message M { int32 a = 1 [json_name = 5]; }',
 		'json_name must be a string')
