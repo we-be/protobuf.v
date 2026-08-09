@@ -109,27 +109,28 @@ protobuf-go v1.36.11, V `-prod`):
 
 | payload | encode | decode |
 |---|---|---|
-| 86 B | **0.28** | **0.51** |
-| 15 KB | **0.35** | **0.49** |
-| 1.6 MB | **0.58** | **0.55** |
+| 86 B | **0.25** | **0.37** |
+| 15 KB | **0.31** | **0.32** |
+| 1.6 MB | **0.49** | **0.38** |
 
 The schema exercises maps, a oneof, and a Timestamp submessage — and the
 gap *widened* when those were added: Go pays a heap pointer per submessage
 and an interface box per oneof arm; V's inline structs and boxed sum types
 don't. The design behind it: single-pass encoding into one exactly-sized
 buffer (`encoded_size()` + `encode_to()`, no length backpatching), `&`
-receivers on generated methods, and a decode path that borrows sub-buffers
-(`read_view`) instead of cloning them. CI attaches a fresh benchmark
-report to every release.
+receivers on generated methods, a decode path that borrows sub-buffers
+(`read_view`) instead of cloning them, and a single-byte-varint fast path
+so the common tag/field read skips the loop. CI attaches a fresh
+benchmark report to every release.
 
-The ratios are hardware-dependent, and we say so rather than cherry-pick:
-on desktop cores (Zen 2 above, including pinned to 4 CPUs) V wins every
-cell, but on GitHub's shared Azure vCPUs encode stays ahead while
-allocation-heavy decode trails Go at ~1.2–1.5× — same code, same V
-version, different silicon. CI runs the full benchmark on every push with
-per-op regression gates calibrated to runner baselines, so a change that
-slows either path relative to Go fails the build; the table lands in each
-run's job summary.
+Ratios are hardware-dependent, and we report both rather than cherry-pick.
+On desktop cores (Zen 2 above, including pinned to 4 CPUs) V wins every
+cell. On GitHub's shared Azure vCPUs encode wins comfortably (0.50–0.69),
+and decode wins for realistic payloads too — 0.79 at 15 KB, 0.82 at 1.6 MB
+— with only sub-100-byte decode at ~1.1× Go, where fixed per-call setup
+dominates. CI runs the full benchmark on every push with per-op regression
+gates, prints the runner's table to the log, and fails the build if either
+path slows relative to Go.
 
 ## What generates to what
 
