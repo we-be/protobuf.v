@@ -162,8 +162,11 @@ type Scalars struct {
 	//	*Scalars_Ci
 	//	*Scalars_Cs
 	//	*Scalars_Cn
-	Choice        isScalars_Choice       `protobuf_oneof:"choice"`
-	Ts            *timestamppb.Timestamp `protobuf:"bytes,29,opt,name=ts,proto3" json:"ts,omitempty"`
+	Choice isScalars_Choice       `protobuf_oneof:"choice"`
+	Ts     *timestamppb.Timestamp `protobuf:"bytes,29,opt,name=ts,proto3" json:"ts,omitempty"`
+	// json_name override: protoc emits "customName", not the default
+	// "renamedField" — the protojson oracle proves we match
+	RenamedField  string `protobuf:"bytes,30,opt,name=renamed_field,json=customName,proto3" json:"renamed_field,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -414,6 +417,13 @@ func (x *Scalars) GetTs() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *Scalars) GetRenamedField() string {
+	if x != nil {
+		return x.RenamedField
+	}
+	return ""
+}
+
 type isScalars_Choice interface {
 	isScalars_Choice()
 }
@@ -443,7 +453,7 @@ const file_scalars_proto_rawDesc = "" +
 	"\rscalars.proto\x1a\x1fgoogle/protobuf/timestamp.proto\".\n" +
 	"\x06Nested\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
-	"\x03num\x18\x02 \x01(\x05R\x03num\"\x8e\a\n" +
+	"\x03num\x18\x02 \x01(\x05R\x03num\"\xb1\a\n" +
 	"\aScalars\x12\f\n" +
 	"\x01a\x18\x01 \x01(\x05R\x01a\x12\f\n" +
 	"\x01b\x18\x02 \x01(\x03R\x01b\x12\f\n" +
@@ -474,7 +484,9 @@ const file_scalars_proto_rawDesc = "" +
 	"\x02ci\x18\x1a \x01(\x05H\x00R\x02ci\x12\x10\n" +
 	"\x02cs\x18\x1b \x01(\tH\x00R\x02cs\x12\x19\n" +
 	"\x02cn\x18\x1c \x01(\v2\a.NestedH\x00R\x02cn\x12*\n" +
-	"\x02ts\x18\x1d \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x1a5\n" +
+	"\x02ts\x18\x1d \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12!\n" +
+	"\rrenamed_field\x18\x1e \x01(\tR\n" +
+	"customName\x1a5\n" +
 	"\aMiEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a5\n" +

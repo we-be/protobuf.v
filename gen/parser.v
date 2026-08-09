@@ -75,6 +75,8 @@ pub mut:
 	is_map     bool
 	key_typ    string // map key type; typ holds the value type
 	oneof      string // enclosing oneof name, empty for regular fields
+	json_name  string // explicit [json_name = "..."] override; empty = derive lowerCamel
+	deprecated bool   // [deprecated = true]
 }
 
 // integral and string types; proto3 also allows bool, but V maps cannot
@@ -446,9 +448,21 @@ fn (mut p Parser) parse_field() !Field {
 			key := p.expect_ident()!
 			p.expect_punct('=')!
 			val := p.next()
-			if key.lit == 'packed' {
-				fld.has_packed = true
-				fld.packed = val.lit == 'true'
+			match key.lit {
+				'packed' {
+					fld.has_packed = true
+					fld.packed = val.lit == 'true'
+				}
+				'json_name' {
+					if val.kind != .str {
+						return error('line ${val.line}: json_name must be a string')
+					}
+					fld.json_name = val.lit
+				}
+				'deprecated' {
+					fld.deprecated = val.lit == 'true'
+				}
+				else {} // unknown options (default, custom) are ignored, like protoc
 			}
 			sep := p.next()
 			if sep.kind == .punct && sep.lit == ']' {

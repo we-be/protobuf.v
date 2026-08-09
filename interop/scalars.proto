@@ -53,6 +53,9 @@ message Scalars {
     Nested cn = 28;
   }
   google.protobuf.Timestamp ts = 29;
+  // json_name override: protoc emits "customName", not the default
+  // "renamedField" — the protojson oracle proves we match
+  string renamed_field = 30 [json_name = "customName"];
 }
 
 // parsed into the AST (and type-checked) but emits no code yet; stub

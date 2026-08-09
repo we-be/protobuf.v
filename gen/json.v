@@ -10,6 +10,7 @@ import strings
 // presence fields, and special forms for the well-known types. Unknown
 // JSON fields are ignored on parse; pb_unknown does not survive JSON.
 
+// default lowerCamelCase JSON name derived from a proto field name
 fn json_name(name string) string {
 	c := camel(name)
 	if c.len == 0 {
@@ -18,14 +19,20 @@ fn json_name(name string) string {
 	return c[..1].to_lower() + c[1..]
 }
 
-// match arm pattern accepting the camel name and, when different, the
-// original proto name
-fn json_key_pattern(name string) string {
-	jn := json_name(name)
-	if jn == name {
+// the JSON key a field emits under: an explicit [json_name] wins, else
+// the lowerCamel default
+fn field_json_name(fld Field) string {
+	return if fld.json_name != '' { fld.json_name } else { json_name(fld.name) }
+}
+
+// match arm accepting a field's JSON name plus, when different, its
+// original proto name — protojson parsers accept both
+fn field_json_key_pattern(fld Field) string {
+	jn := field_json_name(fld)
+	if jn == fld.name {
 		return "'${jn}'"
 	}
-	return "'${jn}', '${name}'"
+	return "'${jn}', '${fld.name}'"
 }
 
 fn json_map_key_emit(key_typ string) string {
@@ -179,7 +186,7 @@ fn (mut g Gen) emit_json_methods(mut b strings.Builder, vname string, scope []st
 fn (mut g Gen) emit_json_field_out(mut b strings.Builder, scope []string, vname string, fld Field) ! {
 	info := g.field_info(scope, vname, fld)!
 	name := sanitize(fld.name)
-	jn := json_name(fld.name)
+	jn := field_json_name(fld)
 	if fld.oneof != '' {
 		b.writeln('\tif ov := m.${sanitize(fld.oneof)} {')
 		b.writeln('\t\tif ov is ${vname}_${camel(fld.name)} {')
@@ -231,7 +238,7 @@ fn (mut g Gen) emit_json_field_out(mut b strings.Builder, scope []string, vname 
 fn (mut g Gen) emit_json_field_in(mut b strings.Builder, scope []string, vname string, fld Field) ! {
 	info := g.field_info(scope, vname, fld)!
 	name := sanitize(fld.name)
-	pattern := json_key_pattern(fld.name)
+	pattern := field_json_key_pattern(fld)
 	b.writeln('\t\t\t${pattern} {')
 	if fld.oneof != '' {
 		b.writeln('\t\t\t\tm.${sanitize(fld.oneof)} = ${vname}_${camel(fld.name)}{')

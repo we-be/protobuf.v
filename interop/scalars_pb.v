@@ -153,34 +153,35 @@ pub type Scalars_Choice = Scalars_Ci | Scalars_Cs | Scalars_Cn
 
 pub struct Scalars {
 pub mut:
-	a          int
-	b          i64
-	c          u32
-	d          u64
-	e          int
-	f          i64
-	g          bool
-	h          string
-	i          []u8
-	j          f32
-	k          f64
-	l          u32
-	m          u64
-	n          int
-	o          i64
-	p          Color
-	rp         []int
-	rs         []string
-	nested     ?Nested
-	rn         []Nested
-	mi         map[int]int
-	ms         map[string]string
-	mn         map[string]Nested
-	mc         map[u32]Color
-	mb         map[i64]bool
-	choice     ?Scalars_Choice
-	ts         ?GoogleProtobuf_Timestamp
-	pb_unknown []u8 // unrecognized fields, re-emitted on encode
+	a             int
+	b             i64
+	c             u32
+	d             u64
+	e             int
+	f             i64
+	g             bool
+	h             string
+	i             []u8
+	j             f32
+	k             f64
+	l             u32
+	m             u64
+	n             int
+	o             i64
+	p             Color
+	rp            []int
+	rs            []string
+	nested        ?Nested
+	rn            []Nested
+	mi            map[int]int
+	ms            map[string]string
+	mn            map[string]Nested
+	mc            map[u32]Color
+	mb            map[i64]bool
+	choice        ?Scalars_Choice
+	ts            ?GoogleProtobuf_Timestamp
+	renamed_field string
+	pb_unknown    []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &Scalars) encoded_size() int {
@@ -286,6 +287,9 @@ pub fn (m &Scalars) encoded_size() int {
 	}
 	if ts := m.ts {
 		n += protobuf.len_field_len(29, ts.encoded_size())
+	}
+	if m.renamed_field != '' {
+		n += protobuf.len_field_len(30, m.renamed_field.len)
 	}
 	return n + m.pb_unknown.len
 }
@@ -445,6 +449,9 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 		e.write_tag(29, .len_delim)
 		e.write_varint(u64(ts.encoded_size()))
 		ts.encode_to(mut e)
+	}
+	if m.renamed_field != '' {
+		e.write_string_field(30, m.renamed_field)
 	}
 	e.write_raw(m.pb_unknown)
 }
@@ -633,6 +640,9 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 			29 {
 				m.ts = GoogleProtobuf_Timestamp.decode(d.read_view()!)!
 			}
+			30 {
+				m.renamed_field = d.read_string()!
+			}
 			else {
 				d.skip(wt)!
 				m.pb_unknown << d.buf[tag_start..d.pos]
@@ -792,6 +802,9 @@ pub fn (m &Scalars) json_value() json2.Any {
 	if ts := m.ts {
 		o['ts'] = ts.json_value()
 	}
+	if m.renamed_field != '' {
+		o['customName'] = json2.Any(m.renamed_field)
+	}
 	return json2.Any(o)
 }
 
@@ -911,6 +924,9 @@ pub fn Scalars.from_json_value(a json2.Any) !Scalars {
 			}
 			'ts' {
 				m.ts = GoogleProtobuf_Timestamp.from_json_value(jv)!
+			}
+			'customName', 'renamed_field' {
+				m.renamed_field = protobuf.json_stringv(jv)!
 			}
 			else {}
 		}

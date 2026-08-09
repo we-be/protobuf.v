@@ -64,7 +64,7 @@ fn test_parse_repo_protos() ! {
 	scalars := parse(os.read_file(os.join_path(root, 'interop', 'scalars.proto'))!)!
 	assert scalars.messages.len == 2
 	assert scalars.messages[1].name == 'Scalars'
-	assert scalars.messages[1].fields.len == 29
+	assert scalars.messages[1].fields.len == 30
 	assert scalars.messages[1].oneofs[0].arms == ['ci', 'cs', 'cn']
 	assert scalars.imports == ['google/protobuf/timestamp.proto']
 	assert scalars.services[0].name == 'ScalarService'
@@ -133,6 +133,25 @@ message GetRequest { int32 x = 1; }')!
 	assert !svc.methods[0].client_streaming && !svc.methods[0].server_streaming
 	assert svc.methods[1].server_streaming && !svc.methods[1].client_streaming
 	assert svc.methods[2].client_streaming && !svc.methods[2].server_streaming
+}
+
+fn test_field_options() ! {
+	f := parse('syntax = "proto3"; message M {
+	string a = 1 [json_name = "customA"];
+	int32 b = 2 [deprecated = true];
+	repeated int32 c = 3 [packed = false, json_name = "cee"];
+	string d = 4;
+}')!
+	m := f.messages[0]
+	assert m.fields[0].json_name == 'customA'
+	assert m.fields[1].deprecated
+	assert m.fields[2].json_name == 'cee' && m.fields[2].has_packed && !m.fields[2].packed
+	assert m.fields[3].json_name == '' // absent = derive
+}
+
+fn test_json_name_must_be_string() {
+	expect_parse_error('syntax = "proto3"; message M { int32 a = 1 [json_name = 5]; }',
+		'json_name must be a string')
 }
 
 fn test_oneof_fields() ! {

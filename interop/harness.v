@@ -165,6 +165,9 @@ fn gen_scalars(mut r Rng) Scalars {
 		}
 	}
 	if r.chance(60) {
+		s.renamed_field = r.strval()
+	}
+	if r.chance(60) {
 		match r.below(3) {
 			0 {
 				s.choice = Scalars_Ci{
@@ -222,6 +225,7 @@ fn known_scalars() Scalars {
 		seconds: i64(-62135596800)
 		nanos:   999999999
 	}
+	s.renamed_field = 'via json_name'
 	return s
 }
 

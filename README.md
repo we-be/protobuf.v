@@ -148,10 +148,11 @@ run's job summary.
 | `service`/`rpc` | with `-grpc`: a `<Service>Client` (unary methods over `grpc.Client`) plus a `<Service>Handler` interface and dispatch struct for `grpc.ConnectServer` |
 
 Canonical JSON (with `-json`) follows the protojson spec: lowerCamel names
-(original names accepted on parse), 64-bit ints as strings, bytes as
-base64, enums by name, defaults omitted except presence fields, and the
-WKT special forms — RFC 3339 timestamps, `"1.5s"` durations, unwrapped
-wrappers, `Struct` as plain JSON, camelCase field masks.
+(or an explicit `[json_name = "..."]` override; the original proto name is
+also accepted on parse), 64-bit ints as strings, bytes as base64, enums by
+name, defaults omitted except presence fields, and the WKT special forms —
+RFC 3339 timestamps, `"1.5s"` durations, unwrapped wrappers, `Struct` as
+plain JSON, camelCase field masks.
 
 Known edges, stated plainly: `map<bool, …>` is rejected (V maps cannot key
 on bool); `google.protobuf.Any` uses the plain object form in JSON (no
