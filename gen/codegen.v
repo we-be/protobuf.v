@@ -357,7 +357,7 @@ fn (mut g Gen) emit_any_json_resolver(mut b strings.Builder) {
 		full := g.loc_full_name(loc)
 		wrapped := loc.pkg_str == 'google.protobuf' && wkt_value_wrapped(loc.msg.name)
 		b.writeln("\t\t'${full}' {")
-		b.writeln('\t\t\treturn ${vname}.decode(pb_value)!.json_value(), ${wrapped}')
+		b.writeln('\t\t\treturn ${vname}.decode(pb_value)!.json_value()!, ${wrapped}')
 		b.writeln('\t\t}')
 	}
 	b.writeln("\t\telse { return error('protojson: unresolvable Any type `\${pb_name}`') }")

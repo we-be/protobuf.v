@@ -291,11 +291,11 @@ fn main() {
 		'gen' {
 			known := known_scalars()
 			os.write_file_array('${dir}/known.bin', known.encode())!
-			os.write_file('${dir}/known.json', known.json())!
+			os.write_file('${dir}/known.json', known.json()!)!
 			for i in 0 .. count {
 				m := gen_scalars(mut r)
 				os.write_file_array('${dir}/fuzz_${i}.bin', m.encode())!
-				os.write_file('${dir}/fuzz_${i}.json', m.json())!
+				os.write_file('${dir}/fuzz_${i}.json', m.json()!)!
 			}
 			println('generated ${count} fuzz messages + known.bin (bin + json)')
 		}

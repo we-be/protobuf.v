@@ -309,7 +309,7 @@ message Rec {
 	assert m2 == m
 	assert m2.encode() == enc
 	// JSON roundtrip with canonical bool keys
-	js := m.json()
+	js := m.json() or { panic(err) }
 	assert js.contains(\'"false"\') && js.contains(\'"true"\'), js
 	m3 := Rec.from_json(js) or { panic(err) }
 	assert m3 == m
@@ -384,7 +384,7 @@ message Rec {
 	r2 := Rec.decode(r.encode()) or { panic(err) }
 	assert r2 == r
 	// JSON emit and parse must agree (they derive keys from the proto name)
-	back := Rec.from_json(r.json()) or { panic(err) }
+	back := Rec.from_json(r.json() or { panic(err) }) or { panic(err) }
 	assert back == r
 	println('MANGLE OK')
 }")!
@@ -460,7 +460,7 @@ message Leaf {
 	assert got.encode() == enc
 	assert got.next != none
 	// JSON roundtrip through the recursion
-	js := list.json()
+	js := list.json() or { panic(err) }
 	back := Node.from_json(js) or { panic(err) }
 	assert back == list
 	// differing deep content compares unequal

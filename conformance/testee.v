@@ -80,6 +80,14 @@ fn runtime_error(s string) Conformance_ConformanceResponse {
 	}
 }
 
+fn serialize_error(s string) Conformance_ConformanceResponse {
+	return Conformance_ConformanceResponse{
+		result: Conformance_ConformanceResponse_SerializeError{
+			value: s
+		}
+	}
+}
+
 fn handle(req Conformance_ConformanceRequest) Conformance_ConformanceResponse {
 	// we implement only the proto3 message; everything else is skipped so the
 	// runner counts it as unsupported rather than failed
@@ -112,9 +120,10 @@ fn handle(req Conformance_ConformanceRequest) Conformance_ConformanceResponse {
 			}
 		}
 		.json {
+			js := msg.json() or { return serialize_error(err.msg()) }
 			return Conformance_ConformanceResponse{
 				result: Conformance_ConformanceResponse_JsonPayload{
-					value: msg.json()
+					value: js
 				}
 			}
 		}

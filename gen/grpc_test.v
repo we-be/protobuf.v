@@ -32,7 +32,7 @@ message GetResponse { bytes value = 1; }')!
 		json:        true
 	})!
 	assert jcode.contains('GetRequest.from_json(body.bytestr())!')
-	assert jcode.contains('resp.json().bytes()')
+	assert jcode.contains('resp.json()!.bytes()')
 }
 
 fn test_grpc_no_package_path() ! {

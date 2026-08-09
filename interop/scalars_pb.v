@@ -110,15 +110,15 @@ pub fn Nested.from_any(a GoogleProtobuf_Any) !Nested {
 	return Nested.decode(a.value)!
 }
 
-pub fn (m &Nested) json() string {
-	return m.json_value().json_str()
+pub fn (m &Nested) json() !string {
+	return m.json_value()!.json_str()
 }
 
 pub fn Nested.from_json(s string) !Nested {
 	return Nested.from_json_value(protobuf.json_parse(s)!)
 }
 
-pub fn (m &Nested) json_value() json2.Any {
+pub fn (m &Nested) json_value() !json2.Any {
 	mut o := map[string]json2.Any{}
 	if m.name != '' {
 		o['name'] = json2.Any(m.name)
@@ -721,15 +721,15 @@ pub fn Scalars.from_any(a GoogleProtobuf_Any) !Scalars {
 	return Scalars.decode(a.value)!
 }
 
-pub fn (m &Scalars) json() string {
-	return m.json_value().json_str()
+pub fn (m &Scalars) json() !string {
+	return m.json_value()!.json_str()
 }
 
 pub fn Scalars.from_json(s string) !Scalars {
 	return Scalars.from_json_value(protobuf.json_parse(s)!)
 }
 
-pub fn (m &Scalars) json_value() json2.Any {
+pub fn (m &Scalars) json_value() !json2.Any {
 	mut o := map[string]json2.Any{}
 	if m.a != 0 {
 		o['a'] = json2.Any(i64(m.a))
@@ -794,12 +794,12 @@ pub fn (m &Scalars) json_value() json2.Any {
 		o['rs'] = json2.Any(rs_a)
 	}
 	if nested := m.nested {
-		o['nested'] = nested.json_value()
+		o['nested'] = nested.json_value()!
 	}
 	if m.rn.len > 0 {
 		mut rn_a := []json2.Any{cap: m.rn.len}
 		for v in m.rn {
-			rn_a << v.json_value()
+			rn_a << v.json_value()!
 		}
 		o['rn'] = json2.Any(rn_a)
 	}
@@ -829,7 +829,7 @@ pub fn (m &Scalars) json_value() json2.Any {
 		mn_ks.sort()
 		for k in mn_ks {
 			v := m.mn[k]
-			mn_o[k] = v.json_value()
+			mn_o[k] = v.json_value()!
 		}
 		o['mn'] = json2.Any(mn_o)
 	}
@@ -865,17 +865,17 @@ pub fn (m &Scalars) json_value() json2.Any {
 	}
 	if ov := m.choice {
 		if ov is Scalars_Cn {
-			o['cn'] = ov.value.json_value()
+			o['cn'] = ov.value.json_value()!
 		}
 	}
 	if ts := m.ts {
-		o['ts'] = ts.json_value()
+		o['ts'] = ts.json_value()!
 	}
 	if m.renamed_field != '' {
 		o['customName'] = json2.Any(m.renamed_field)
 	}
 	if packed := m.packed {
-		o['packed'] = packed.json_value()
+		o['packed'] = packed.json_value()!
 	}
 	return json2.Any(o)
 }
@@ -1170,8 +1170,8 @@ pub fn GoogleProtobuf_Timestamp.from_any(a GoogleProtobuf_Any) !GoogleProtobuf_T
 	return GoogleProtobuf_Timestamp.decode(a.value)!
 }
 
-pub fn (m &GoogleProtobuf_Timestamp) json() string {
-	return m.json_value().json_str()
+pub fn (m &GoogleProtobuf_Timestamp) json() !string {
+	return m.json_value()!.json_str()
 }
 
 pub fn GoogleProtobuf_Timestamp.from_json(s string) !GoogleProtobuf_Timestamp {
@@ -1179,7 +1179,11 @@ pub fn GoogleProtobuf_Timestamp.from_json(s string) !GoogleProtobuf_Timestamp {
 }
 
 // canonical JSON form: RFC 3339 in UTC
-pub fn (m &GoogleProtobuf_Timestamp) json_value() json2.Any {
+pub fn (m &GoogleProtobuf_Timestamp) json_value() !json2.Any {
+	// protojson range: 0001-01-01T00:00:00Z .. 9999-12-31T23:59:59.999999999Z
+	if m.seconds < -62135596800 || m.seconds > 253402300799 || m.nanos < 0 || m.nanos > 999999999 {
+		return error('protojson: timestamp out of range')
+	}
 	t := time.unix(m.seconds)
 	mut frac := ''
 	if m.nanos != 0 {
@@ -1283,8 +1287,8 @@ pub fn GoogleProtobuf_Any.from_any(a GoogleProtobuf_Any) !GoogleProtobuf_Any {
 	return GoogleProtobuf_Any.decode(a.value)!
 }
 
-pub fn (m &GoogleProtobuf_Any) json() string {
-	return m.json_value().json_str()
+pub fn (m &GoogleProtobuf_Any) json() !string {
+	return m.json_value()!.json_str()
 }
 
 pub fn GoogleProtobuf_Any.from_json(s string) !GoogleProtobuf_Any {
@@ -1295,7 +1299,7 @@ pub fn GoogleProtobuf_Any.from_json(s string) !GoogleProtobuf_Any {
 // {"@type": url, "value": <form>} for value-wrapped WKTs. Uses the
 // generated fileset resolver; unresolvable types degrade to a raw
 // base64 form rather than erroring (json_value cannot fail).
-pub fn (m &GoogleProtobuf_Any) json_value() json2.Any {
+pub fn (m &GoogleProtobuf_Any) json_value() !json2.Any {
 	if m.type_url == '' {
 		return json2.Any(map[string]json2.Any{})
 	}
@@ -1338,16 +1342,16 @@ pub fn GoogleProtobuf_Any.from_json_value(a json2.Any) !GoogleProtobuf_Any {
 fn pb_any_to_json(pb_name string, pb_value []u8) !(json2.Any, bool) {
 	match pb_name {
 		'Nested' {
-			return Nested.decode(pb_value)!.json_value(), false
+			return Nested.decode(pb_value)!.json_value()!, false
 		}
 		'Scalars' {
-			return Scalars.decode(pb_value)!.json_value(), false
+			return Scalars.decode(pb_value)!.json_value()!, false
 		}
 		'google.protobuf.Timestamp' {
-			return GoogleProtobuf_Timestamp.decode(pb_value)!.json_value(), true
+			return GoogleProtobuf_Timestamp.decode(pb_value)!.json_value()!, true
 		}
 		'google.protobuf.Any' {
-			return GoogleProtobuf_Any.decode(pb_value)!.json_value(), true
+			return GoogleProtobuf_Any.decode(pb_value)!.json_value()!, true
 		}
 		else {
 			return error('protojson: unresolvable Any type `${pb_name}`')

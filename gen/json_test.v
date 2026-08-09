@@ -108,7 +108,7 @@ fn main() {
 			paths: [\'user_name\', \'meta.sub_field\']
 		}
 	}
-	j := p.json()
+	j := p.json() or { panic(err) }
 	// canonical spellings
 	assert j.contains(\'"big":"9007199254740993"\'), j
 	assert j.contains(\'"ubig":"18446744073709551615"\'), j
@@ -138,12 +138,12 @@ fn main() {
 	inf := Pet{
 		ratio: math.inf(1)
 	}
-	ij := inf.json()
+	ij := inf.json() or { panic(err) }
 	assert ij.contains(\'"ratio":"Infinity"\'), ij
 	q2 := Pet.from_json(ij) or { panic(err) }
 	assert math.is_inf(q2.ratio, 1)
 	// defaults omitted: empty message is {}
-	assert Pet{}.json() == \'{}\'
+	assert (Pet{}.json() or { panic(err) }) == \'{}\'
 	println(\'JSON OK\')
 }')!
 	vexe := os.getenv_opt('VEXE') or { 'v' }

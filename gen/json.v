@@ -103,7 +103,7 @@ fn (g &Gen) json_field_emit(info FieldInfo, fld Field, ve string) string {
 	return match info.kind {
 		.scalar { json_scalar_emit(fld.typ, ve) }
 		.enum_ { '${info.vtype.to_lower()}_to_json(${ve})' }
-		.message { '${ve}.json_value()' }
+		.message { '${ve}.json_value()!' }
 	}
 }
 
@@ -168,8 +168,8 @@ fn wkt_value_wrapped(name string) bool {
 
 fn (mut g Gen) emit_json_methods(mut b strings.Builder, vname string, scope []string, path []string, m Message) ! {
 	b.writeln('')
-	b.writeln('pub fn (m &${vname}) json() string {')
-	b.writeln('\treturn m.json_value().json_str()')
+	b.writeln('pub fn (m &${vname}) json() !string {')
+	b.writeln('\treturn m.json_value()!.json_str()')
 	b.writeln('}')
 	b.writeln('')
 	b.writeln('pub fn ${vname}.from_json(s string) !${vname} {')
@@ -182,7 +182,7 @@ fn (mut g Gen) emit_json_methods(mut b strings.Builder, vname string, scope []st
 	}
 
 	b.writeln('')
-	b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+	b.writeln('pub fn (m &${vname}) json_value() !json2.Any {')
 	if m.fields.len == 0 {
 		b.writeln('\treturn json2.Any(map[string]json2.Any{})')
 	} else {
@@ -331,7 +331,7 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 			b.writeln('// {"@type": url, "value": <form>} for value-wrapped WKTs. Uses the')
 			b.writeln('// generated fileset resolver; unresolvable types degrade to a raw')
 			b.writeln('// base64 form rather than erroring (json_value cannot fail).')
-			b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+			b.writeln('pub fn (m &${vname}) json_value() !json2.Any {')
 			b.writeln("\tif m.type_url == '' {")
 			b.writeln('\t\treturn json2.Any(map[string]json2.Any{})')
 			b.writeln('\t}')
@@ -374,7 +374,11 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 		'Timestamp' {
 			b.writeln('')
 			b.writeln('// canonical JSON form: RFC 3339 in UTC')
-			b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+			b.writeln('pub fn (m &${vname}) json_value() !json2.Any {')
+			b.writeln('\t// protojson range: 0001-01-01T00:00:00Z .. 9999-12-31T23:59:59.999999999Z')
+			b.writeln('\tif m.seconds < -62135596800 || m.seconds > 253402300799 || m.nanos < 0 || m.nanos > 999999999 {')
+			b.writeln("\t\treturn error('protojson: timestamp out of range')")
+			b.writeln('\t}')
 			b.writeln('\tt := time.unix(m.seconds)')
 			b.writeln('\tmut frac := ""')
 			b.writeln('\tif m.nanos != 0 {')
@@ -401,7 +405,14 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 		'Duration' {
 			b.writeln('')
 			b.writeln('// canonical JSON form: decimal seconds with an s suffix')
-			b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+			b.writeln('pub fn (m &${vname}) json_value() !json2.Any {')
+			b.writeln('\t// protojson range: |seconds| <= 315576000000, matching-sign nanos')
+			b.writeln('\tif m.seconds < -315576000000 || m.seconds > 315576000000 || m.nanos < -999999999 || m.nanos > 999999999 {')
+			b.writeln("\t\treturn error('protojson: duration out of range')")
+			b.writeln('\t}')
+			b.writeln('\tif (m.seconds < 0 && m.nanos > 0) || (m.seconds > 0 && m.nanos < 0) {')
+			b.writeln("\t\treturn error('protojson: duration sign mismatch')")
+			b.writeln('\t}')
 			b.writeln('\tmut s := m.seconds')
 			b.writeln('\tmut n := m.nanos')
 			b.writeln('\tneg := s < 0 || n < 0')
@@ -460,12 +471,12 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 		'Struct' {
 			b.writeln('')
 			b.writeln('// canonical JSON form: a plain object')
-			b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+			b.writeln('pub fn (m &${vname}) json_value() !json2.Any {')
 			b.writeln('\tmut o := map[string]json2.Any{}')
 			b.writeln('\tmut ks := m.fields.keys()')
 			b.writeln('\tks.sort()')
 			b.writeln('\tfor k in ks {')
-			b.writeln('\t\to[k] = m.fields[k].json_value()')
+			b.writeln('\t\to[k] = m.fields[k].json_value()!')
 			b.writeln('\t}')
 			b.writeln('\treturn json2.Any(o)')
 			b.writeln('}')
@@ -481,7 +492,7 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 		'Value' {
 			b.writeln('')
 			b.writeln('// canonical JSON form: the value itself')
-			b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+			b.writeln('pub fn (m &${vname}) json_value() !json2.Any {')
 			b.writeln('\tif k := m.kind {')
 			b.writeln('\t\tmatch k {')
 			b.writeln('\t\t\t${vname}_NullValue {')
@@ -497,10 +508,10 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 			b.writeln('\t\t\t\treturn json2.Any(k.value)')
 			b.writeln('\t\t\t}')
 			b.writeln('\t\t\t${vname}_StructValue {')
-			b.writeln('\t\t\t\treturn k.value.json_value()')
+			b.writeln('\t\t\t\treturn k.value.json_value()!')
 			b.writeln('\t\t\t}')
 			b.writeln('\t\t\t${vname}_ListValue {')
-			b.writeln('\t\t\t\treturn k.value.json_value()')
+			b.writeln('\t\t\t\treturn k.value.json_value()!')
 			b.writeln('\t\t\t}')
 			b.writeln('\t\t}')
 			b.writeln('\t}')
@@ -555,10 +566,10 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 		'ListValue' {
 			b.writeln('')
 			b.writeln('// canonical JSON form: a plain array')
-			b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+			b.writeln('pub fn (m &${vname}) json_value() !json2.Any {')
 			b.writeln('\tmut arr := []json2.Any{cap: m.values.len}')
 			b.writeln('\tfor v in m.values {')
-			b.writeln('\t\tarr << v.json_value()')
+			b.writeln('\t\tarr << v.json_value()!')
 			b.writeln('\t}')
 			b.writeln('\treturn json2.Any(arr)')
 			b.writeln('}')
@@ -574,7 +585,7 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 		'FieldMask' {
 			b.writeln('')
 			b.writeln('// canonical JSON form: comma-joined lowerCamel paths')
-			b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+			b.writeln('pub fn (m &${vname}) json_value() !json2.Any {')
 			b.writeln('\tmut parts := []string{cap: m.paths.len}')
 			b.writeln('\tfor p in m.paths {')
 			b.writeln('\t\tparts << protobuf.json_camel_path(p)')
@@ -598,7 +609,7 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 			st := wrapper_scalar[name]
 			b.writeln('')
 			b.writeln('// canonical JSON form: the wrapped value')
-			b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+			b.writeln('pub fn (m &${vname}) json_value() !json2.Any {')
 			b.writeln('\treturn ${json_scalar_emit(st, 'm.value')}')
 			b.writeln('}')
 			b.writeln('')

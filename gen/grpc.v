@@ -143,7 +143,7 @@ fn (mut g Gen) emit_connect_service(mut b strings.Builder, svc Service, prefix s
 		b.writeln('\t\t\tresp := s.h.${sanitize(snake(m.name))}(req)!')
 		if g.json {
 			b.writeln('\t\t\tout := if codec == .json {')
-			b.writeln('\t\t\t\tresp.json().bytes()')
+			b.writeln('\t\t\t\tresp.json()!.bytes()')
 			b.writeln('\t\t\t} else {')
 			b.writeln('\t\t\t\tresp.encode()')
 			b.writeln('\t\t\t}')
