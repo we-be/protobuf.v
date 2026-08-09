@@ -158,7 +158,7 @@ service Ping {
 	assert code.contains('fields map[string]GoogleProtobuf_Value')
 	assert code.contains('pub type GoogleProtobuf_Value_Kind =')
 	stubs := generate_grpc_set(fs, GenOpts{})!
-	assert stubs.contains('poke(req GoogleProtobuf_Empty) !Event {')
+	assert stubs.contains('poke(req GoogleProtobuf_Empty, opts ...grpc.CallOption) !grpc.Reply[Event] {')
 	// time mappings ride along with the WKT emission
 	assert code.contains('import time')
 	assert code.contains('pub fn (m &GoogleProtobuf_Timestamp) as_time() time.Time {')
