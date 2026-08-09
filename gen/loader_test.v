@@ -165,6 +165,67 @@ service Ping {
 	assert code.contains('pub fn GoogleProtobuf_Timestamp.from_time(t time.Time) GoogleProtobuf_Timestamp {')
 }
 
+fn test_any_pack_unpack_e2e() ! {
+	dir := os.join_path(os.temp_dir(), 'vpbgen_any_${os.getpid()}')
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	write_protos(dir, {
+		'a.proto': 'syntax = "proto3";
+package demo;
+import "google/protobuf/any.proto";
+message Point { int32 x = 1; int32 y = 2; }
+message Envelope { string note = 1; google.protobuf.Any payload = 2; }
+message Outer { message Inner { int32 v = 1; } }'
+	})!
+	fs := load(os.join_path(dir, 'a.proto'), LoadOpts{})!
+	code := generate_set(fs, GenOpts{})!
+	// the type_url carries the dotted proto full name, not the V name
+	assert code.contains("type_url: 'type.googleapis.com/demo.Point'")
+	assert code.contains('pub fn (m &Point) to_any() GoogleProtobuf_Any {')
+	assert code.contains('pub fn Point.from_any(a GoogleProtobuf_Any) !Point {')
+	// nested type: dotted proto path (pkg.Outer.Inner), V name Outer_Inner
+	assert code.contains("type_url: 'type.googleapis.com/demo.Outer.Inner'")
+	assert code.contains('pub fn (m &Outer_Inner) to_any() GoogleProtobuf_Any {')
+
+	edir := os.join_path(dir, 'e2e')
+	os.mkdir_all(edir)!
+	os.write_file(os.join_path(edir, 'a_pb.v'), code)!
+	os.write_file(os.join_path(edir, 'main.v'), "fn main() {
+	p := Point{
+		x: 3
+		y: -7
+	}
+	any := p.to_any()
+	assert any.type_url == 'type.googleapis.com/demo.Point'
+	assert any.type_name() == 'demo.Point'
+	// roundtrip through a real Envelope encode/decode
+	env := Envelope{
+		note:    'hi'
+		payload: any
+	}
+	dec := Envelope.decode(env.encode()) or { panic(err) }
+	got := dec.payload or { panic('no payload') }
+	back := Point.from_any(got) or { panic(err) }
+	assert back == p
+	// wrong target type is refused, not silently mis-decoded
+	if _ := Envelope.from_any(got) {
+		panic('should have rejected type mismatch')
+	}
+	// a bare (host-less) type_url still resolves by name
+	bare := GoogleProtobuf_Any{
+		type_url: 'demo.Point'
+		value:    p.encode()
+	}
+	assert Point.from_any(bare) or { panic(err) } == p
+	println('ANY OK')
+}")!
+	vexe := os.getenv_opt('VEXE') or { 'v' }
+	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(edir)}')
+	assert res.exit_code == 0, res.output
+	assert res.output.contains('ANY OK'), res.output
+}
+
 fn test_wkt_time_mappings_e2e() ! {
 	dir := os.join_path(os.temp_dir(), 'vpbgen_wkt_time_${os.getpid()}')
 	defer {

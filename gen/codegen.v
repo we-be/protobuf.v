@@ -621,6 +621,10 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 	if g.cur_file_pkg == 'google.protobuf' && path.len == 0 {
 		g.emit_wkt_mappings(mut b, vname, m.name)
 	}
+	// google.protobuf.Any pack/unpack, only when Any is in the fileset
+	if any_v := g.any_vname() {
+		g.emit_any_helpers(mut b, vname, g.proto_full_name(path, m.name), any_v)
+	}
 	if g.json {
 		g.emit_json_methods(mut b, vname, scope, path, m)!
 	}
@@ -628,6 +632,43 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 	for c in m.messages {
 		g.emit_message(mut b, scope, c)!
 	}
+}
+
+// the V type name of google.protobuf.Any if the fileset defines it
+fn (g &Gen) any_vname() ?string {
+	sym := g.syms['google.protobuf.Any'] or { return none }
+	return sym.vname
+}
+
+// dotted proto full name (package + nesting + name), for Any type_urls
+fn (g &Gen) proto_full_name(path []string, name string) string {
+	mut parts := []string{}
+	if g.cur_file_pkg != '' {
+		parts << g.cur_file_pkg
+	}
+	parts << path
+	parts << name
+	return parts.join('.')
+}
+
+// to_any packs the message; <T>.from_any unpacks (verifying the type name).
+// Caller names the target type — no runtime registry needed.
+fn (mut g Gen) emit_any_helpers(mut b strings.Builder, vname string, full_name string, any_v string) {
+	b.writeln('')
+	b.writeln('pub fn (m &${vname}) to_any() ${any_v} {')
+	b.writeln('\treturn ${any_v}{')
+	b.writeln("\t\ttype_url: 'type.googleapis.com/${full_name}'")
+	b.writeln('\t\tvalue:    m.encode()')
+	b.writeln('\t}')
+	b.writeln('}')
+	b.writeln('')
+	b.writeln('pub fn ${vname}.from_any(a ${any_v}) !${vname} {')
+	b.writeln("\tgot := a.type_url.all_after_last('/')")
+	b.writeln("\tif got != '${full_name}' {")
+	b.writeln("\t\treturn error('protobuf: Any holds `\${got}`, not `${full_name}`')")
+	b.writeln('\t}')
+	b.writeln('\treturn ${vname}.decode(a.value)!')
+	b.writeln('}')
 }
 
 // idiomatic V conversions on the well-known types, detected by
@@ -680,6 +721,13 @@ fn (mut g Gen) emit_wkt_mappings(mut b strings.Builder, vname string, name strin
 			b.writeln('\t\tseconds: i64(d) / 1_000_000_000')
 			b.writeln('\t\tnanos:   int(i64(d) % 1_000_000_000)')
 			b.writeln('\t}')
+			b.writeln('}')
+		}
+		'Any' {
+			b.writeln('')
+			b.writeln('// the packed message type name (the type_url after the last /)')
+			b.writeln('pub fn (m &${vname}) type_name() string {')
+			b.writeln("\treturn m.type_url.all_after_last('/')")
 			b.writeln('}')
 		}
 		else {}

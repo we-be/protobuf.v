@@ -146,6 +146,7 @@ path slows relative to Go.
 | `import` | cross-package references; foreign packages get a CamelCase prefix (`google.protobuf.Timestamp` → `GoogleProtobuf_Timestamp`) |
 | `Timestamp`, `Duration` | `as_time()`/`from_time()` ↔ `time.Time`, `as_duration()`/`from_duration()` ↔ `time.Duration` (saturating, like protobuf-go) |
 | unknown fields | preserved in `pb_unknown []u8`, re-emitted on encode — older schemas forward newer data losslessly |
+| `Any` | when `google/protobuf/any.proto` is imported, every message gets `m.to_any()` and `T.from_any(any)!` (binary pack/unpack; the caller names the target type, no registry needed) |
 | `service`/`rpc` | with `-grpc`: a `<Service>Client` (unary methods over `grpc.Client`) plus a `<Service>Handler` interface and dispatch struct for `grpc.ConnectServer` |
 
 Canonical JSON (with `-json`) follows the protojson spec: lowerCamel names
@@ -156,10 +157,11 @@ RFC 3339 timestamps, `"1.5s"` durations, unwrapped wrappers, `Struct` as
 plain JSON, camelCase field masks.
 
 Known edges, stated plainly: `map<bool, …>` is rejected (V maps cannot key
-on bool); `google.protobuf.Any` uses the plain object form in JSON (no
-type registry); unknown *JSON* keys are ignored on parse; V's `==`
-includes `pb_unknown`; recursion through singular message fields is
-rejected (repeated/map/oneof recursion is fine).
+on bool); `Any` pack/unpack is binary-only — its JSON still uses the plain
+`{typeUrl, value}` object form, since the canonical `@type` expansion needs
+a runtime type registry we don't have; unknown *JSON* keys are ignored on
+parse; V's `==` includes `pb_unknown`; recursion through singular message
+fields is rejected (repeated/map/oneof recursion is fine).
 
 ## How it's validated
 
