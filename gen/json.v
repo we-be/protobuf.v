@@ -108,7 +108,13 @@ fn (mut g Gen) emit_enum_json(mut b strings.Builder, vname string, e Enum) {
 	b.writeln('')
 	b.writeln('fn ${vname.to_lower()}_to_json(v ${vname}) json2.Any {')
 	b.writeln('\treturn match int(v) {')
+	// emit the canonical (first) name per number; aliases would duplicate arms
+	mut seen_out := map[int]bool{}
 	for val in e.values {
+		if val.number in seen_out {
+			continue
+		}
+		seen_out[val.number] = true
 		b.writeln("\t\t${val.number} { json2.Any('${val.name}') }")
 	}
 	b.writeln('\t\telse { json2.Any(i64(int(v))) }')
@@ -118,7 +124,13 @@ fn (mut g Gen) emit_enum_json(mut b strings.Builder, vname string, e Enum) {
 	b.writeln('fn ${vname.to_lower()}_from_json(a json2.Any) !${vname} {')
 	b.writeln('\tif a is string {')
 	b.writeln('\t\tmatch a {')
+	// every name (including aliases) parses back to its number
+	mut seen_in := map[string]bool{}
 	for val in e.values {
+		if val.name in seen_in {
+			continue
+		}
+		seen_in[val.name] = true
 		b.writeln("\t\t\t'${val.name}' { return unsafe { ${vname}(${val.number}) } }")
 	}
 	b.writeln("\t\t\telse { return error('protojson: unknown value `\${a}` for ${vname}') }")
@@ -265,6 +277,9 @@ fn (mut g Gen) emit_json_field_in(mut b strings.Builder, scope []string, vname s
 		b.writeln('\t\t\t\tfor it in protobuf.json_array(jv)! {')
 		b.writeln('\t\t\t\t\tm.${name} << ${g.json_field_parse(info, fld, 'it')}')
 		b.writeln('\t\t\t\t}')
+	} else if info.kind == .message && g.is_boxed(scope, fld.number) {
+		b.writeln('\t\t\t\tbox_${name} := ${g.json_field_parse(info, fld, 'jv')}')
+		b.writeln('\t\t\t\tm.${name} = &box_${name}')
 	} else {
 		b.writeln('\t\t\t\tm.${name} = ${g.json_field_parse(info, fld, 'jv')}')
 	}

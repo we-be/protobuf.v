@@ -48,8 +48,9 @@ pub mut:
 
 pub struct Enum {
 pub mut:
-	name   string
-	values []EnumValue
+	name        string
+	values      []EnumValue
+	allow_alias bool // option allow_alias = true; permits repeated value numbers
 }
 
 pub struct EnumValue {
@@ -666,7 +667,11 @@ fn (mut p Parser) parse_enum() !Enum {
 			return error('line ${t.line}: unexpected `${t.lit}` in enum ${e.name}')
 		}
 		if t.lit == 'option' || t.lit == 'reserved' {
+			is_opt := t.lit == 'option'
 			p.next()
+			if is_opt && p.peek().kind == .ident && p.peek().lit == 'allow_alias' {
+				e.allow_alias = true
+			}
 			p.skip_to_semi()!
 			continue
 		}

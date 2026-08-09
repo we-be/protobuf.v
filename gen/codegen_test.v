@@ -335,11 +335,67 @@ fn test_deprecated_field_annotation() ! {
 	assert !code.contains('keep int @[deprecated]')
 }
 
+fn test_allow_alias_enum() ! {
+	f := parse('syntax = "proto3";
+enum Kind {
+	option allow_alias = true;
+	KIND_UNKNOWN = 0;
+	KIND_A = 1;
+	KIND_ALPHA = 1;
+	KIND_B = 2;
+}
+message Holder { Kind k = 1; }')!
+	code := generate(f, GenOpts{ json: true })!
+	// only the first name per number becomes a V enum member (distinct values)
+	assert code.contains('kind_a = 1')
+	assert !code.contains('kind_alpha = 1')
+	// but every alias name still parses back from JSON
+	assert code.contains("'KIND_ALPHA'")
+}
+
+fn test_field_name_mangling_e2e() ! {
+	// uppercase and leading-underscore proto names must become valid V
+	// identifiers, used consistently across encode/decode/json
+	f := parse('syntax = "proto3";
+message Rec {
+	int32 fieldName7 = 1;
+	int32 FieldName8 = 2;
+	int32 _leading = 3;
+	int32 __two = 4;
+}')!
+	code := generate(f, GenOpts{ json: true })!
+	assert code.contains('fieldname7 int')
+	assert code.contains('fieldname8 int')
+	assert code.contains('leading int')
+	assert code.contains('two int')
+	dir := os.join_path(os.temp_dir(), 'vpbgen_mangle_${os.getpid()}')
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.write_file(os.join_path(dir, 'm_pb.v'), code)!
+	os.write_file(os.join_path(dir, 'main.v'), "fn main() {
+	r := Rec{
+		fieldname7: 7
+		fieldname8: 8
+		leading:    3
+		two:        4
+	}
+	r2 := Rec.decode(r.encode()) or { panic(err) }
+	assert r2 == r
+	// JSON emit and parse must agree (they derive keys from the proto name)
+	back := Rec.from_json(r.json()) or { panic(err) }
+	assert back == r
+	println('MANGLE OK')
+}")!
+	vexe := os.getenv_opt('VEXE') or { 'v' }
+	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	assert res.exit_code == 0, res.output
+	assert res.output.contains('MANGLE OK'), res.output
+}
+
 fn test_gen_errors() {
 	expect_gen_error('syntax = "proto3"; message M { Unknown u = 1; }', 'unknown type')
-	expect_gen_error('syntax = "proto3"; message Node { Node next = 1; }', 'recursive')
-	expect_gen_error('syntax = "proto3"; message A { B b = 1; } message B { A a = 1; }',
-		'recursive')
 	expect_gen_error('syntax = "proto3"; enum E { A = 0; B = 0; }', 'allow_alias')
 	expect_gen_error('syntax = "proto3"; service S { rpc M (A) returns (B); } message A { int32 x = 1; }',
 		'unknown type')
@@ -358,6 +414,69 @@ fn test_map_self_reference_is_fine() ! {
 	f := parse('syntax = "proto3"; message Node { int32 val = 1; map<string, Node> kids = 2; }')!
 	code := generate(f, GenOpts{})!
 	assert code.contains('kids map[string]Node')
+}
+
+fn test_recursive_message_e2e() ! {
+	// direct self-recursion (Node.next) and a mutual cycle (Branch<->Leaf).
+	// the back-edge singular field is boxed as ?&T and a value == is generated.
+	f := parse('syntax = "proto3";
+message Node {
+	int32 val = 1;
+	Node next = 2;
+}
+message Branch {
+	Leaf leaf = 1;
+}
+message Leaf {
+	int32 v = 1;
+	Branch back = 2;
+}')!
+	code := generate(f, GenOpts{ json: true })!
+	assert code.contains('next ?&Node') // self-cycle back-edge boxed
+	assert code.contains('leaf ?Leaf') // inline, not the back-edge
+	assert code.contains('back ?&Branch') // mutual-cycle back-edge boxed
+	assert code.contains('fn (a Node) == (b Node) bool')
+	assert code.contains('fn (a Leaf) == (b Leaf) bool')
+	dir := os.join_path(os.temp_dir(), 'vpbgen_rec_${os.getpid()}')
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.write_file(os.join_path(dir, 'r_pb.v'), code)!
+	os.write_file(os.join_path(dir, 'main.v'), "fn main() {
+	list := Node{
+		val:  1
+		next: &Node{
+			val:  2
+			next: &Node{
+				val: 3
+			}
+		}
+	}
+	enc := list.encode()
+	got := Node.decode(enc) or { panic(err) }
+	// value equality across independent heap allocations, not pointer identity
+	assert got == list
+	assert got.encode() == enc
+	assert got.next != none
+	// JSON roundtrip through the recursion
+	js := list.json()
+	back := Node.from_json(js) or { panic(err) }
+	assert back == list
+	// differing deep content compares unequal
+	other := Node{
+		val:  1
+		next: &Node{
+			val: 99
+		}
+	}
+	assert other != list
+	println('REC OK')
+}")!
+	vexe := os.getenv_opt('VEXE') or { 'v' }
+	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	assert res.exit_code == 0, res.output
+	assert res.output.contains('REC OK'), res.output
 }
 
 // sum types box their variants, so a oneof arm may recurse; prove it

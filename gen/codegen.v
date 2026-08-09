@@ -60,6 +60,7 @@ mut:
 	locs         map[string]MsgLoc // vname -> definition site, for the recursion walk
 	cur_pkg      []string          // package segments of the file being emitted
 	cur_file_pkg string
+	boxed        map[string]bool   // "msg.full#fieldnum" -> field boxed as ?&T to break a recursion cycle
 }
 
 // where a message lives, so cross-file recursion walks resolve in the
@@ -84,11 +85,23 @@ const v_keywords = ['as', 'asm', 'assert', 'atomic', 'break', 'const', 'continue
 	'rlock', 'select', 'shared', 'sizeof', 'spawn', 'static', 'struct', 'true', 'type', 'typeof',
 	'union', 'unsafe', 'volatile']
 
+// V struct field names must be lowercase (V rejects uppercase in field names),
+// so identifiers are lowercased. JSON names derive from the original proto name
+// separately, and the wire uses field numbers, so this is purely the in-memory
+// identifier. Keyword clashes get a trailing underscore.
 fn sanitize(name string) string {
-	if name in v_keywords {
-		return name + '_'
+	mut low := name.to_lower()
+	// V rejects field names that start with `_`
+	for low.starts_with('_') {
+		low = low[1..]
 	}
-	return name
+	if low == '' {
+		low = 'field'
+	}
+	if low in v_keywords {
+		return low + '_'
+	}
+	return low
 }
 
 // proto snake_case to a V type-name suffix: text_msg -> TextMsg
@@ -507,9 +520,12 @@ fn (g &Gen) field_info(scope []string, msg_name string, fld Field) !FieldInfo {
 	}
 }
 
-// a cycle through singular message fields would make the V struct
-// infinitely sized (?T stores inline); repeated fields break cycles
-fn (g &Gen) check_recursion() ! {
+// A cycle through singular message fields would make the V struct infinitely
+// sized (?T stores inline), so we DFS the type graph and mark the back-edge
+// field that closes each cycle for ?&T boxing (an optional heap pointer, the
+// only recursive struct shape V allows). repeated/map/oneof fields are already
+// heap-backed and break cycles on their own, so they are never boxed.
+fn (mut g Gen) check_recursion() ! {
 	mut state := map[string]int{} // 0 unvisited, 1 in-progress, 2 done
 	for f in g.files {
 		pkg := pkg_segments(f.package)
@@ -519,15 +535,13 @@ fn (g &Gen) check_recursion() ! {
 	}
 }
 
-fn (g &Gen) dfs(pkg []string, path []string, m Message, mut state map[string]int) ! {
+fn (mut g Gen) dfs(pkg []string, path []string, m Message, mut state map[string]int) ! {
 	mut fullpath := pkg.clone()
 	fullpath << path
 	full := qualify(fullpath, m.name)
-	if state[full] == 2 {
+	if state[full] != 0 {
+		// already done, or on the stack (reached via an already-boxed back-edge)
 		return
-	}
-	if state[full] == 1 {
-		return error('recursive message type ${full} through singular fields is not supported (make the field repeated)')
 	}
 	state[full] = 1
 	mut scope := path.clone()
@@ -535,8 +549,6 @@ fn (g &Gen) dfs(pkg []string, path []string, m Message, mut state map[string]int
 	mut rscope := pkg.clone()
 	rscope << scope
 	for fld in m.fields {
-		// repeated/map fields are reference-backed containers and sum types
-		// box their variants, so all three break recursion cycles
 		if fld.label == .repeated || fld.is_map || fld.oneof != '' {
 			continue
 		}
@@ -548,12 +560,30 @@ fn (g &Gen) dfs(pkg []string, path []string, m Message, mut state map[string]int
 			continue
 		}
 		loc := g.locs[sym.vname] or { continue }
+		mut tp := loc.pkg.clone()
+		tp << loc.path
+		target_full := qualify(tp, loc.msg.name)
+		if state[target_full] == 1 {
+			// back-edge into an in-progress type: box this field to break the cycle
+			g.boxed['${full}#${fld.number}'] = true
+			continue
+		}
 		g.dfs(loc.pkg, loc.path, loc.msg, mut state)!
 	}
 	state[full] = 2
 	for c in m.messages {
 		g.dfs(pkg, scope, c, mut state)!
 	}
+}
+
+// is this singular message field marked for ?&T boxing to break a recursion cycle?
+fn (g &Gen) is_boxed(scope []string, fnum int) bool {
+	if g.boxed.len == 0 {
+		return false
+	}
+	mut fp := g.cur_pkg.clone()
+	fp << scope
+	return '${fp.join('.')}#${fnum}' in g.boxed
 }
 
 fn (mut g Gen) emit_enums_in(mut b strings.Builder, path []string, m Message) ! {
@@ -571,13 +601,23 @@ fn (mut g Gen) emit_enum(mut b strings.Builder, path []string, e Enum) ! {
 	mut seen := map[int]bool{}
 	for val in e.values {
 		if val.number in seen {
-			return error('enum ${e.name}: aliased values (allow_alias) are not supported')
+			if !e.allow_alias {
+				return error('enum ${e.name}: aliased values require `option allow_alias = true`')
+			}
+			continue
 		}
 		seen[val.number] = true
 	}
 	b.writeln('')
 	b.writeln('pub enum ${g.vname_for(g.cur_file_pkg, path, e.name)} {')
+	// aliases share a number; V enums need distinct values, so keep the first
+	// name per number (the canonical one protojson emits) and drop the rest
+	mut emitted := map[int]bool{}
 	for val in e.values {
+		if val.number in emitted {
+			continue
+		}
+		emitted[val.number] = true
 		b.writeln('\t${sanitize(val.name.to_lower())} = ${val.number}')
 	}
 	b.writeln('}')
@@ -635,7 +675,11 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 		} else if fld.label == .repeated {
 			t = '[]${t}'
 		} else if fld.label == .optional || info.kind == .message {
-			t = '?${t}'
+			if info.kind == .message && g.is_boxed(scope, fld.number) {
+				t = '?&${t}' // recursive field: optional heap pointer
+			} else {
+				t = '?${t}'
+			}
 		}
 		// [deprecated = true] → V's field attribute (warns cross-module)
 		attr := if fld.deprecated { ' @[deprecated]' } else { '' }
@@ -643,6 +687,22 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 	}
 	b.writeln('\tpb_unknown []u8 // unrecognized fields, re-emitted on encode')
 	b.writeln('}')
+
+	// recursive messages hold ?&T fields, which V's autogenerated == compares
+	// by pointer; emit value equality via the canonical (deterministic) encoding
+	mut has_boxed := false
+	for fld in m.fields {
+		if g.is_boxed(scope, fld.number) {
+			has_boxed = true
+			break
+		}
+	}
+	if has_boxed {
+		b.writeln('')
+		b.writeln('pub fn (a ${vname}) == (b ${vname}) bool {')
+		b.writeln('\treturn a.encode() == b.encode()')
+		b.writeln('}')
+	}
 
 	mut fields := m.fields.clone()
 	fields.sort(a.number < b.number)
@@ -1016,7 +1076,9 @@ fn (mut g Gen) emit_size_field(mut b strings.Builder, scope []string, vname stri
 				b.writeln('\t}')
 			}
 		} else {
-			b.writeln('\tfor v in m.${name} {')
+			// unpacked: fixed-width scalars never reference v in the size expr
+			vvar := if packed_elem_width(fld.typ) > 0 { '_' } else { 'v' }
+			b.writeln('\tfor ${vvar} in m.${name} {')
 			b.writeln('\t\tn += ${scalar_size_expr(fld.typ, n, 'v')}')
 			b.writeln('\t}')
 		}
@@ -1142,7 +1204,12 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 	b.writeln('\t\t\t${n} {')
 	match info.kind {
 		.message {
-			b.writeln('\t\t\t\tm.${name} = ${info.vtype}.decode(d.read_view()!)!')
+			if g.is_boxed(scope, fld.number) {
+				b.writeln('\t\t\t\tbox_${name} := ${info.vtype}.decode(d.read_view()!)!')
+				b.writeln('\t\t\t\tm.${name} = &box_${name}')
+			} else {
+				b.writeln('\t\t\t\tm.${name} = ${info.vtype}.decode(d.read_view()!)!')
+			}
 		}
 		.enum_ {
 			b.writeln('\t\t\t\tm.${name} = unsafe { ${info.vtype}(d.read_int32()!) }')
