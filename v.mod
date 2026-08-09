@@ -1,7 +1,7 @@
 Module {
 	name: 'protobuf'
 	description: 'Protocol Buffers (proto3) wire format encoding/decoding for V'
-	version: '0.6.0'
+	version: '0.7.0'
 	license: 'MIT'
 	dependencies: []
 }
