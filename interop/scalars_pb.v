@@ -561,7 +561,13 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 				m.rs << d.read_string()!
 			}
 			19 {
-				m.nested = Nested.decode(d.read_view()!)!
+				mv_nested := d.read_view()!
+				mut mb_nested := []u8{}
+				if old := m.nested {
+					mb_nested = old.encode()
+				}
+				mb_nested << mv_nested
+				m.nested = Nested.decode(mb_nested)!
 			}
 			20 {
 				m.rn << Nested.decode(d.read_view()!)!
@@ -657,18 +663,38 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 				}
 			}
 			28 {
+				mv_cn := d.read_view()!
+				mut mb_cn := []u8{}
+				if cur := m.choice {
+					if cur is Scalars_Cn {
+						mb_cn = cur.value.encode()
+					}
+				}
+				mb_cn << mv_cn
 				m.choice = Scalars_Cn{
-					value: Nested.decode(d.read_view()!)!
+					value: Nested.decode(mb_cn)!
 				}
 			}
 			29 {
-				m.ts = GoogleProtobuf_Timestamp.decode(d.read_view()!)!
+				mv_ts := d.read_view()!
+				mut mb_ts := []u8{}
+				if old := m.ts {
+					mb_ts = old.encode()
+				}
+				mb_ts << mv_ts
+				m.ts = GoogleProtobuf_Timestamp.decode(mb_ts)!
 			}
 			30 {
 				m.renamed_field = d.read_string()!
 			}
 			31 {
-				m.packed = GoogleProtobuf_Any.decode(d.read_view()!)!
+				mv_packed := d.read_view()!
+				mut mb_packed := []u8{}
+				if old := m.packed {
+					mb_packed = old.encode()
+				}
+				mb_packed << mv_packed
+				m.packed = GoogleProtobuf_Any.decode(mb_packed)!
 			}
 			else {
 				d.skip(wt)!

@@ -1120,13 +1120,33 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 	name := sanitize(fld.name)
 	n := fld.number
 	if fld.oneof != '' {
+		of := sanitize(fld.oneof)
+		arm := '${vname}_${camel(fld.name)}'
+		if info.kind == .message {
+			// a message oneof arm merges with a prior value of the SAME arm;
+			// a different prior arm is replaced (merge with empty = the new one)
+			b.writeln('\t\t\t${n} {')
+			b.writeln('\t\t\t\tmv_${name} := d.read_view()!')
+			b.writeln('\t\t\t\tmut mb_${name} := []u8{}')
+			b.writeln('\t\t\t\tif cur := m.${of} {')
+			b.writeln('\t\t\t\t\tif cur is ${arm} {')
+			b.writeln('\t\t\t\t\t\tmb_${name} = cur.value.encode()')
+			b.writeln('\t\t\t\t\t}')
+			b.writeln('\t\t\t\t}')
+			b.writeln('\t\t\t\tmb_${name} << mv_${name}')
+			b.writeln('\t\t\t\tm.${of} = ${arm}{')
+			b.writeln('\t\t\t\t\tvalue: ${info.vtype}.decode(mb_${name})!')
+			b.writeln('\t\t\t\t}')
+			b.writeln('\t\t\t}')
+			return
+		}
 		arm_read := match info.kind {
 			.scalar { 'd.${scalar_reader(fld.typ)}()!' }
 			.enum_ { 'unsafe { ${info.vtype}(d.read_int32()!) }' }
-			.message { '${info.vtype}.decode(d.read_view()!)!' }
+			.message { '' }
 		}
 		b.writeln('\t\t\t${n} {')
-		b.writeln('\t\t\t\tm.${sanitize(fld.oneof)} = ${vname}_${camel(fld.name)}{')
+		b.writeln('\t\t\t\tm.${of} = ${arm}{')
 		b.writeln('\t\t\t\t\tvalue: ${arm_read}')
 		b.writeln('\t\t\t\t}')
 		b.writeln('\t\t\t}')
@@ -1204,11 +1224,19 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 	b.writeln('\t\t\t${n} {')
 	match info.kind {
 		.message {
+			// proto3 merges repeated occurrences of a message field; decoding
+			// the concatenation of the prior bytes and the new ones does that
+			b.writeln('\t\t\t\tmv_${name} := d.read_view()!')
+			b.writeln('\t\t\t\tmut mb_${name} := []u8{}')
+			b.writeln('\t\t\t\tif old := m.${name} {')
+			b.writeln('\t\t\t\t\tmb_${name} = old.encode()')
+			b.writeln('\t\t\t\t}')
+			b.writeln('\t\t\t\tmb_${name} << mv_${name}')
 			if g.is_boxed(scope, fld.number) {
-				b.writeln('\t\t\t\tbox_${name} := ${info.vtype}.decode(d.read_view()!)!')
+				b.writeln('\t\t\t\tbox_${name} := ${info.vtype}.decode(mb_${name})!')
 				b.writeln('\t\t\t\tm.${name} = &box_${name}')
 			} else {
-				b.writeln('\t\t\t\tm.${name} = ${info.vtype}.decode(d.read_view()!)!')
+				b.writeln('\t\t\t\tm.${name} = ${info.vtype}.decode(mb_${name})!')
 			}
 		}
 		.enum_ {
