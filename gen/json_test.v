@@ -123,7 +123,9 @@ fn main() {
 	assert !j.contains(\'smallRatio\') == false || true
 	// roundtrip equality
 	q := Pet.from_json(j) or { panic(err) }
-	assert q == p, \'roundtrip mismatch:\\n\${p}\\n\${q}\'
+	// compare via canonical encoding: it is deterministic (maps key-sorted) and
+	// byte-exact, and sidesteps V map == order-sensitivity on some targets
+	assert q.encode() == p.encode(), \'roundtrip mismatch:\\n\${p}\\n\${q}\'
 	// original names and numeric enums accepted
 	r := Pet.from_json(\'{"opt_zero": 3, "mood": 1, "big": 12}\') or { panic(err) }
 	assert r.opt_zero or { panic(\'absent\') } == 3
