@@ -113,7 +113,10 @@ pub fn (mut d Decoder) read_uint64() !u64 {
 }
 
 pub fn (mut d Decoder) read_sint32() !int {
-	return int(zigzag_decode(d.read_varint()!))
+	// sint32 truncates the wire varint to 32 bits BEFORE zigzag-decoding, per
+	// protoc; bits above 32 must not survive into the result (else a value like
+	// 0x1_FFFFFFFD would decode to 1 instead of -2147483647)
+	return int(zigzag_decode(u64(u32(d.read_varint()!))))
 }
 
 pub fn (mut d Decoder) read_sint64() !i64 {
