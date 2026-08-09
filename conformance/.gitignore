@@ -1,0 +1,4 @@
+conf_pb.v
+.stage/
+.protobuf-src/
+.testee_bin

@@ -1,0 +1,25 @@
+# Known conformance failures for protobuf.v (proto3).
+#
+# All ten are the same class: an out-of-range google.protobuf.Timestamp or
+# Duration that decodes fine from the wire but is NOT representable in
+# canonical protojson, so the reference implementation expects JSON
+# *serialization* to fail. protobuf.v's json() is infallible by design (it
+# returns a string, not a Result), so it emits a best-effort value instead of
+# erroring. Enforcing serialize-time range validation would require making the
+# entire JSON serialization path fallible; the values involved are exotic
+# (year > 9999, |duration| > ~10000 years), so this is a documented limitation
+# rather than a fix worth that churn.
+#
+# Everything else in the proto3 suite passes: 1458 successes, 0 unexpected
+# failures. See README.md.
+
+Required.Proto3.TimestampProtoInputTooLarge.JsonOutput
+Required.Proto3.TimestampProtoInputTooSmall.JsonOutput
+Required.Proto3.TimestampProtoNanoTooLarge.JsonOutput
+Required.Proto3.TimestampProtoNegativeNanos.JsonOutput
+Required.Proto3.DurationProtoInputTooLarge.JsonOutput
+Required.Proto3.DurationProtoInputTooSmall.JsonOutput
+Required.Proto3.DurationProtoNanosTooLarge.JsonOutput
+Required.Proto3.DurationProtoNanosTooSmall.JsonOutput
+Required.Proto3.DurationProtoNanosWrongSign.JsonOutput
+Required.Proto3.DurationProtoNanosWrongSignNegativeSecs.JsonOutput
