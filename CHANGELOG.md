@@ -12,6 +12,20 @@ mappings, and generated enums/oneof sum types — together with `protobuf.Encode
 `protobuf.json_*` helpers are `pub` only so generated code can call them across
 modules; they are runtime-internal and not covered by the semver contract.
 
+## [1.1.0] - 2026-08-09
+
+### Changed
+- **gRPC client stubs (`vpbgen -grpc`)** now take functional call options and
+  return response metadata: each method is
+  `fn (mut c SvcClient) rpc(req In, opts ...grpc.CallOption) !grpc.Reply[Out]`
+  (was `!Out`), enabling per-call deadlines and metadata via
+  `grpc.timeout(...)` / `grpc.header(...)` and surfacing the server's response
+  metadata on `Reply`. Requires grpc.v with `CallOption`/`Reply`.
+
+The generated gRPC-stub *shape* is not part of protobuf.v's frozen 1.0 API
+(the message surface is); it evolves with grpc.v and stabilizes when grpc.v
+reaches 1.0. This is why a stub-shape change ships as a minor, not a major.
+
 ## [1.0.0] - 2026-08-09
 
 First stable release. proto3 is feature-complete and validated against the
@@ -104,6 +118,7 @@ Initial proto3 wire runtime and `vpbgen` code generation: messages, nested
 types, enums (open), scalars, `optional`, `repeated`/`packed`, `map<K,V>`, and
 `oneof` (sum types), with a protoc byte-oracle and adversarial fuzzing.
 
+[1.1.0]: https://github.com/we-be/protobuf.v/releases/tag/v1.1.0
 [1.0.0]: https://github.com/we-be/protobuf.v/releases/tag/v1.0.0
 [0.7.0]: https://github.com/we-be/protobuf.v/releases/tag/v0.7.0
 [0.6.0]: https://github.com/we-be/protobuf.v/releases/tag/v0.6.0

@@ -79,9 +79,12 @@ pub fn generate_grpc_set(fs FileSet, opts GenOpts) !string {
 				b.writeln('// rpc ${m.name} skipped: ${dir} streaming is not supported yet')
 				continue
 			}
-			b.writeln('pub fn (mut x ${svc.name}Client) ${sanitize(snake(m.name))}(req ${in_sym.vname}) !${out_sym.vname} {')
-			b.writeln("\tresp := x.c.unary('${prefix}${m.name}', req.encode())!")
-			b.writeln('\treturn ${out_sym.vname}.decode(resp)!')
+			b.writeln('pub fn (mut x ${svc.name}Client) ${sanitize(snake(m.name))}(req ${in_sym.vname}, opts ...grpc.CallOption) !grpc.Reply[${out_sym.vname}] {')
+			b.writeln("\traw := x.c.unary('${prefix}${m.name}', req.encode(), ...opts)!")
+			b.writeln('\treturn grpc.Reply[${out_sym.vname}]{')
+			b.writeln('\t\tmsg:      ${out_sym.vname}.decode(raw.payload)!')
+			b.writeln('\t\tmetadata: raw.metadata')
+			b.writeln('\t}')
 			b.writeln('}')
 		}
 		g.emit_connect_service(mut b, svc, prefix)!

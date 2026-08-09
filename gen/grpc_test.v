@@ -15,8 +15,8 @@ message GetResponse { bytes value = 1; }')!
 	assert code.contains('module kvpb')
 	assert code.contains('import grpc')
 	assert code.contains('pub struct KVClient {')
-	assert code.contains('pub fn (mut x KVClient) get(req GetRequest) !GetResponse {')
-	assert code.contains("x.c.unary('/kv.KV/Get', req.encode())")
+	assert code.contains('pub fn (mut x KVClient) get(req GetRequest, opts ...grpc.CallOption) !grpc.Reply[GetResponse] {')
+	assert code.contains("x.c.unary('/kv.KV/Get', req.encode(), ...opts)")
 	assert code.contains('// rpc WatchAll skipped: server streaming is not supported yet')
 	assert !code.contains('watch_all(')
 	// Connect server glue: handler interface + dispatch struct, unary only
@@ -39,7 +39,7 @@ fn test_grpc_no_package_path() ! {
 	f :=
 		parse('syntax = "proto3"; service S { rpc Do (M) returns (M); } message M { int32 x = 1; }')!
 	code := generate_grpc(f, GenOpts{})!
-	assert code.contains("x.c.unary('/S/Do', req.encode())")
+	assert code.contains("x.c.unary('/S/Do', req.encode(), ...opts)")
 }
 
 fn test_grpc_requires_services() {
