@@ -551,7 +551,9 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 		} else if fld.label == .optional || info.kind == .message {
 			t = '?${t}'
 		}
-		b.writeln('\t${sanitize(fld.name)} ${t}')
+		// [deprecated = true] → V's field attribute (warns cross-module)
+		attr := if fld.deprecated { ' @[deprecated]' } else { '' }
+		b.writeln('\t${sanitize(fld.name)} ${t}${attr}')
 	}
 	b.writeln('\tpb_unknown []u8 // unrecognized fields, re-emitted on encode')
 	b.writeln('}')

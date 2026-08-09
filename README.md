@@ -147,6 +147,7 @@ path slows relative to Go.
 | `Timestamp`, `Duration` | `as_time()`/`from_time()` ↔ `time.Time`, `as_duration()`/`from_duration()` ↔ `time.Duration` (saturating, like protobuf-go) |
 | unknown fields | preserved in `pb_unknown []u8`, re-emitted on encode — older schemas forward newer data losslessly |
 | `Any` | when `google/protobuf/any.proto` is imported, every message gets `m.to_any()` and `T.from_any(any)!` (binary pack/unpack; the caller names the target type, no registry needed) |
+| `[deprecated = true]` | field carries V's `@[deprecated]` attribute — the compiler warns on cross-module use |
 | `service`/`rpc` | with `-grpc`: a `<Service>Client` (unary methods over `grpc.Client`) plus a `<Service>Handler` interface and dispatch struct for `grpc.ConnectServer` |
 
 Canonical JSON (with `-json`) follows the protojson spec: lowerCamel names

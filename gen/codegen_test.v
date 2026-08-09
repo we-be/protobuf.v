@@ -234,6 +234,20 @@ message Hollow {}')!
 	assert res.output.contains('UNKNOWN OK'), res.output
 }
 
+fn test_deprecated_field_annotation() ! {
+	f := parse('syntax = "proto3"; message M {
+	int32 keep = 1;
+	int32 old = 2 [deprecated = true];
+	repeated string old_list = 3 [deprecated = true];
+}')!
+	code := generate(f, GenOpts{})!
+	assert code.contains('old int @[deprecated]')
+	assert code.contains('old_list []string @[deprecated]')
+	// non-deprecated fields stay clean
+	assert code.contains('keep int\n') || code.contains('\tkeep int\n')
+	assert !code.contains('keep int @[deprecated]')
+}
+
 fn test_gen_errors() {
 	expect_gen_error('syntax = "proto3"; message M { Unknown u = 1; }', 'unknown type')
 	expect_gen_error('syntax = "proto3"; message Node { Node next = 1; }', 'recursive')
