@@ -18,7 +18,17 @@ pub fn (d &Decoder) more() bool {
 	return d.pos < d.buf.len
 }
 
+@[inline]
 pub fn (mut d Decoder) read_varint() !u64 {
+	// single-byte fast path: the overwhelmingly common case (small field
+	// tags and values) skips the loop, shift, and continuation checks
+	if d.pos < d.buf.len {
+		b0 := d.buf[d.pos]
+		if b0 & 0x80 == 0 {
+			d.pos++
+			return u64(b0)
+		}
+	}
 	mut result := u64(0)
 	mut shift := u32(0)
 	for shift < 70 {

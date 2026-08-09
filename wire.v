@@ -9,6 +9,7 @@ pub enum WireType {
 	fixed32   = 5
 }
 
+@[inline]
 fn wire_type_from(v u64) !WireType {
 	match v {
 		0 { return .varint }
