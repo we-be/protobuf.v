@@ -246,6 +246,30 @@ pub fn json_floatv(a json2.Any) !f64 {
 	}
 }
 
+// float fields reject a finite JSON number that overflows f32; only the
+// explicit "Infinity"/"-Infinity"/"NaN" strings may yield a non-finite float
+pub fn json_f32v(a json2.Any) !f32 {
+	v := json_floatv(a)!
+	f := f32(v)
+	if math.is_inf(f, 0) && !math.is_inf(v, 0) {
+		return error('protojson: value out of float range')
+	}
+	return f
+}
+
+// double fields: a non-finite result from a JSON number (as opposed to the
+// string spellings) means the literal overflowed the double range
+pub fn json_f64v(a json2.Any) !f64 {
+	if a is string {
+		return json_floatv(a)!
+	}
+	v := json_floatv(a)!
+	if math.is_nan(v) || math.is_inf(v, 0) {
+		return error('protojson: value out of double range')
+	}
+	return v
+}
+
 pub fn json_bytesv(a json2.Any) ![]u8 {
 	s := json_stringv(a)!
 	if s == '' {
@@ -316,12 +340,48 @@ pub fn json_snake_path(p string) string {
 
 // map keys arrive as strings regardless of the proto key type
 pub fn json_key_i64(k string) !i64 {
+	if k == '' {
+		return error('protojson: empty integer string')
+	}
+	// protojson accepts exponential/decimal spellings for integer fields when
+	// the value is integral and in range (e.g. "1E5", "100.0")
+	if k.contains('.') || k.contains('e') || k.contains('E') {
+		f := strconv.atof64(k) or { return error('protojson: bad integer `${k}`') }
+		if math.is_nan(f) || math.is_inf(f, 0) || f < -9.223372036854776e18
+			|| f > 9.223372036854776e18 {
+			return error('protojson: integer out of range `${k}`')
+		}
+		if f != f64(i64(f)) {
+			return error('protojson: not an integer `${k}`')
+		}
+		return i64(f)
+	}
 	v := strconv.parse_int(k, 10, 64) or { return error('protojson: bad integer `${k}`') }
+	// V's parse_int silently clamps on overflow; round-trip to catch it
+	if v.str() != k {
+		return error('protojson: integer out of range `${k}`')
+	}
 	return v
 }
 
 pub fn json_key_u64(k string) !u64 {
-	v := strconv.parse_uint(k, 10, 64) or { return error('protojson: bad integer `${k}`') }
+	if k == '' {
+		return error('protojson: empty integer string')
+	}
+	if k.contains('.') || k.contains('e') || k.contains('E') {
+		f := strconv.atof64(k) or { return error('protojson: bad integer `${k}`') }
+		if math.is_nan(f) || math.is_inf(f, 0) || f < 0 || f > 1.8446744073709552e19 {
+			return error('protojson: unsigned out of range `${k}`')
+		}
+		if f != f64(u64(f)) {
+			return error('protojson: not an integer `${k}`')
+		}
+		return u64(f)
+	}
+	v := strconv.parse_uint(k, 10, 64) or { return error('protojson: bad unsigned `${k}`') }
+	if v.str() != k {
+		return error('protojson: unsigned out of range `${k}`')
+	}
 	return v
 }
 

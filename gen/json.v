@@ -82,8 +82,8 @@ fn json_scalar_parse(t string, ae string) string {
 		'bool' { 'protobuf.json_boolv(${ae})!' }
 		'string' { 'protobuf.json_stringv(${ae})!' }
 		'bytes' { 'protobuf.json_bytesv(${ae})!' }
-		'float' { 'f32(protobuf.json_floatv(${ae})!)' }
-		'double' { 'protobuf.json_floatv(${ae})!' }
+		'float' { 'protobuf.json_f32v(${ae})!' }
+		'double' { 'protobuf.json_f64v(${ae})!' }
 		else { '' }
 	}
 }

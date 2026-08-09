@@ -889,10 +889,10 @@ pub fn Scalars.from_json_value(a json2.Any) !Scalars {
 				m.i = protobuf.json_bytesv(jv)!
 			}
 			'j' {
-				m.j = f32(protobuf.json_floatv(jv)!)
+				m.j = protobuf.json_f32v(jv)!
 			}
 			'k' {
-				m.k = protobuf.json_floatv(jv)!
+				m.k = protobuf.json_f64v(jv)!
 			}
 			'l' {
 				m.l = protobuf.json_uint32v(jv)!
