@@ -25,8 +25,8 @@ import strings
 //   (raw wire bytes, arrival order) re-emitted after known fields, so a
 //   decode/encode roundtrip through an older schema loses nothing. Note
 //   V's == therefore treats unknowns as part of the value
-// - recursion through singular message fields is rejected (a ?T field
-//   stores its value inline in V, so the type would be infinitely sized)
+// - recursion through singular message fields is boxed as ?&T (V can't store
+//   a recursive value inline); those messages get a value-equality == operator
 
 pub struct GenOpts {
 pub:
@@ -60,7 +60,7 @@ mut:
 	locs         map[string]MsgLoc // vname -> definition site, for the recursion walk
 	cur_pkg      []string          // package segments of the file being emitted
 	cur_file_pkg string
-	boxed        map[string]bool   // "msg.full#fieldnum" -> field boxed as ?&T to break a recursion cycle
+	boxed        map[string]bool // "msg.full#fieldnum" -> field boxed as ?&T to break a recursion cycle
 }
 
 // where a message lives, so cross-file recursion walks resolve in the

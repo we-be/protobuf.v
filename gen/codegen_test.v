@@ -288,14 +288,14 @@ message Rec {
 		os.rmdir_all(dir) or {}
 	}
 	os.write_file(os.join_path(dir, 'b_pb.v'), code)!
-	os.write_file(os.join_path(dir, 'main.v'), "fn main() {
+	os.write_file(os.join_path(dir, 'main.v'), 'fn main() {
 	m := Rec{
 		flags: {
 			0: 10
 			1: 20
 		}
 		names: {
-			1: 'yes'
+			1: \'yes\'
 		}
 		nodes: {
 			0: Nested{
@@ -310,11 +310,11 @@ message Rec {
 	assert m2.encode() == enc
 	// JSON roundtrip with canonical bool keys
 	js := m.json()
-	assert js.contains('\"false\"') && js.contains('\"true\"'), js
+	assert js.contains(\'"false"\') && js.contains(\'"true"\'), js
 	m3 := Rec.from_json(js) or { panic(err) }
 	assert m3 == m
-	println('BOOLMAP OK')
-}")!
+	println(\'BOOLMAP OK\')
+}')!
 	vexe := os.getenv_opt('VEXE') or { 'v' }
 	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
 	assert res.exit_code == 0, res.output
