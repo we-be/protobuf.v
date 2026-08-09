@@ -11,12 +11,23 @@ import strings
 // JSON fields are ignored on parse; pb_unknown does not survive JSON.
 
 // default lowerCamelCase JSON name derived from a proto field name
+// protobuf's ToJsonName: drop each underscore and uppercase the letter that
+// follows it; every other character keeps its original case (the first letter
+// is NOT forced to lower, so `_field` -> `Field` and `FieldName8` is unchanged)
 fn json_name(name string) string {
-	c := camel(name)
-	if c.len == 0 {
-		return name
+	mut out := []u8{cap: name.len}
+	mut cap_next := false
+	for c in name {
+		if c == `_` {
+			cap_next = true
+		} else if cap_next {
+			out << if c >= `a` && c <= `z` { c - 32 } else { c }
+			cap_next = false
+		} else {
+			out << c
+		}
 	}
-	return c[..1].to_lower() + c[1..]
+	return out.bytestr()
 }
 
 // the JSON key a field emits under: an explicit [json_name] wins, else
