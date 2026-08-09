@@ -4,6 +4,7 @@ import json2
 import encoding.base64
 import math
 import strconv
+import time
 
 // Runtime support for the generated canonical-JSON (protojson) methods.
 // Parsers are tolerant the way the spec demands: 64-bit ints arrive as
@@ -268,6 +269,25 @@ pub fn json_f64v(a json2.Any) !f64 {
 		return error('protojson: value out of double range')
 	}
 	return v
+}
+
+// Strict RFC3339 for a protojson Timestamp: requires the uppercase `T`
+// date/time separator and an uppercase `Z` (or a numeric offset), and enforces
+// the 0001-01-01..9999-12-31 range. Returns (seconds, nanos). protoc's parser
+// rejects lowercase t/z and a space separator, so we do too.
+pub fn parse_timestamp_rfc3339(s string) !(i64, int) {
+	if s.len < 20 || s[10] != `T` {
+		return error('protojson: timestamp needs the uppercase T separator')
+	}
+	if s.ends_with('z') {
+		return error('protojson: timestamp zone must be uppercase Z')
+	}
+	t := time.parse_rfc3339(s) or { return error('protojson: bad timestamp `${s}`') }
+	secs := t.unix()
+	if secs < -62135596800 || secs > 253402300799 {
+		return error('protojson: timestamp out of range `${s}`')
+	}
+	return secs, t.nanosecond
 }
 
 pub fn json_bytesv(a json2.Any) ![]u8 {

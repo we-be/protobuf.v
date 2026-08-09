@@ -47,7 +47,13 @@ pub fn (mut d Decoder) read_varint() !u64 {
 }
 
 pub fn (mut d Decoder) read_tag() !(u32, WireType) {
+	start := d.pos
 	v := d.read_varint()!
+	// a tag is a 32-bit varint: field numbers cap at 2^29, so a conformant
+	// tag is at most 5 bytes. reject overlong encodings, as protoc does.
+	if d.pos - start > 5 {
+		return error('overlong tag varint')
+	}
 	field := v >> 3
 	if field == 0 || field > 0x1FFFFFFF {
 		return error('invalid field number ${field}')

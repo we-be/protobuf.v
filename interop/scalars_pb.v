@@ -133,15 +133,16 @@ pub fn Nested.from_json_value(a json2.Any) !Nested {
 	obj := protobuf.json_object(a)!
 	mut m := Nested{}
 	for jk, jv in obj {
-		if jv is json2.Null {
-			continue
-		}
 		match jk {
 			'name' {
-				m.name = protobuf.json_stringv(jv)!
+				if jv !is json2.Null {
+					m.name = protobuf.json_stringv(jv)!
+				}
 			}
 			'num' {
-				m.num = protobuf.json_int32v(jv)!
+				if jv !is json2.Null {
+					m.num = protobuf.json_int32v(jv)!
+				}
 			}
 			else {}
 		}
@@ -883,124 +884,192 @@ pub fn Scalars.from_json_value(a json2.Any) !Scalars {
 	obj := protobuf.json_object(a)!
 	mut m := Scalars{}
 	for jk, jv in obj {
-		if jv is json2.Null {
-			continue
-		}
 		match jk {
 			'a' {
-				m.a = protobuf.json_int32v(jv)!
+				if jv !is json2.Null {
+					m.a = protobuf.json_int32v(jv)!
+				}
 			}
 			'b' {
-				m.b = protobuf.json_intv(jv)!
+				if jv !is json2.Null {
+					m.b = protobuf.json_intv(jv)!
+				}
 			}
 			'c' {
-				m.c = protobuf.json_uint32v(jv)!
+				if jv !is json2.Null {
+					m.c = protobuf.json_uint32v(jv)!
+				}
 			}
 			'd' {
-				m.d = protobuf.json_uintv(jv)!
+				if jv !is json2.Null {
+					m.d = protobuf.json_uintv(jv)!
+				}
 			}
 			'e' {
-				m.e = protobuf.json_int32v(jv)!
+				if jv !is json2.Null {
+					m.e = protobuf.json_int32v(jv)!
+				}
 			}
 			'f' {
-				m.f = protobuf.json_intv(jv)!
+				if jv !is json2.Null {
+					m.f = protobuf.json_intv(jv)!
+				}
 			}
 			'g' {
-				m.g = protobuf.json_boolv(jv)!
+				if jv !is json2.Null {
+					m.g = protobuf.json_boolv(jv)!
+				}
 			}
 			'h' {
-				m.h = protobuf.json_stringv(jv)!
+				if jv !is json2.Null {
+					m.h = protobuf.json_stringv(jv)!
+				}
 			}
 			'i' {
-				m.i = protobuf.json_bytesv(jv)!
+				if jv !is json2.Null {
+					m.i = protobuf.json_bytesv(jv)!
+				}
 			}
 			'j' {
-				m.j = protobuf.json_f32v(jv)!
+				if jv !is json2.Null {
+					m.j = protobuf.json_f32v(jv)!
+				}
 			}
 			'k' {
-				m.k = protobuf.json_f64v(jv)!
+				if jv !is json2.Null {
+					m.k = protobuf.json_f64v(jv)!
+				}
 			}
 			'l' {
-				m.l = protobuf.json_uint32v(jv)!
+				if jv !is json2.Null {
+					m.l = protobuf.json_uint32v(jv)!
+				}
 			}
 			'm' {
-				m.m = protobuf.json_uintv(jv)!
+				if jv !is json2.Null {
+					m.m = protobuf.json_uintv(jv)!
+				}
 			}
 			'n' {
-				m.n = protobuf.json_int32v(jv)!
+				if jv !is json2.Null {
+					m.n = protobuf.json_int32v(jv)!
+				}
 			}
 			'o' {
-				m.o = protobuf.json_intv(jv)!
+				if jv !is json2.Null {
+					m.o = protobuf.json_intv(jv)!
+				}
 			}
 			'p' {
-				m.p = color_from_json(jv)!
+				if jv !is json2.Null {
+					m.p = color_from_json(jv)!
+				}
 			}
 			'rp' {
-				for it in protobuf.json_array(jv)! {
-					m.rp << protobuf.json_int32v(it)!
+				if jv !is json2.Null {
+					for it in protobuf.json_array(jv)! {
+						m.rp << protobuf.json_int32v(it)!
+					}
 				}
 			}
 			'rs' {
-				for it in protobuf.json_array(jv)! {
-					m.rs << protobuf.json_stringv(it)!
+				if jv !is json2.Null {
+					for it in protobuf.json_array(jv)! {
+						m.rs << protobuf.json_stringv(it)!
+					}
 				}
 			}
 			'nested' {
-				m.nested = Nested.from_json_value(jv)!
+				if jv !is json2.Null {
+					m.nested = Nested.from_json_value(jv)!
+				}
 			}
 			'rn' {
-				for it in protobuf.json_array(jv)! {
-					m.rn << Nested.from_json_value(it)!
+				if jv !is json2.Null {
+					for it in protobuf.json_array(jv)! {
+						m.rn << Nested.from_json_value(it)!
+					}
 				}
 			}
 			'mi' {
-				for mk, mv in protobuf.json_object(jv)! {
-					m.mi[int(protobuf.json_key_i64(mk)!)] = protobuf.json_int32v(mv)!
+				if jv !is json2.Null {
+					for mk, mv in protobuf.json_object(jv)! {
+						m.mi[int(protobuf.json_key_i64(mk)!)] = protobuf.json_int32v(mv)!
+					}
 				}
 			}
 			'ms' {
-				for mk, mv in protobuf.json_object(jv)! {
-					m.ms[mk] = protobuf.json_stringv(mv)!
+				if jv !is json2.Null {
+					for mk, mv in protobuf.json_object(jv)! {
+						m.ms[mk] = protobuf.json_stringv(mv)!
+					}
 				}
 			}
 			'mn' {
-				for mk, mv in protobuf.json_object(jv)! {
-					m.mn[mk] = Nested.from_json_value(mv)!
+				if jv !is json2.Null {
+					for mk, mv in protobuf.json_object(jv)! {
+						m.mn[mk] = Nested.from_json_value(mv)!
+					}
 				}
 			}
 			'mc' {
-				for mk, mv in protobuf.json_object(jv)! {
-					m.mc[u32(protobuf.json_key_u64(mk)!)] = color_from_json(mv)!
+				if jv !is json2.Null {
+					for mk, mv in protobuf.json_object(jv)! {
+						m.mc[u32(protobuf.json_key_u64(mk)!)] = color_from_json(mv)!
+					}
 				}
 			}
 			'mb' {
-				for mk, mv in protobuf.json_object(jv)! {
-					m.mb[protobuf.json_key_i64(mk)!] = protobuf.json_boolv(mv)!
+				if jv !is json2.Null {
+					for mk, mv in protobuf.json_object(jv)! {
+						m.mb[protobuf.json_key_i64(mk)!] = protobuf.json_boolv(mv)!
+					}
 				}
 			}
 			'ci' {
-				m.choice = Scalars_Ci{
-					value: protobuf.json_int32v(jv)!
+				if jv !is json2.Null {
+					if m.choice != none {
+						return error('protojson: multiple values for oneof choice')
+					}
+					m.choice = Scalars_Ci{
+						value: protobuf.json_int32v(jv)!
+					}
 				}
 			}
 			'cs' {
-				m.choice = Scalars_Cs{
-					value: protobuf.json_stringv(jv)!
+				if jv !is json2.Null {
+					if m.choice != none {
+						return error('protojson: multiple values for oneof choice')
+					}
+					m.choice = Scalars_Cs{
+						value: protobuf.json_stringv(jv)!
+					}
 				}
 			}
 			'cn' {
-				m.choice = Scalars_Cn{
-					value: Nested.from_json_value(jv)!
+				if jv !is json2.Null {
+					if m.choice != none {
+						return error('protojson: multiple values for oneof choice')
+					}
+					m.choice = Scalars_Cn{
+						value: Nested.from_json_value(jv)!
+					}
 				}
 			}
 			'ts' {
-				m.ts = GoogleProtobuf_Timestamp.from_json_value(jv)!
+				if jv !is json2.Null {
+					m.ts = GoogleProtobuf_Timestamp.from_json_value(jv)!
+				}
 			}
 			'customName', 'renamed_field' {
-				m.renamed_field = protobuf.json_stringv(jv)!
+				if jv !is json2.Null {
+					m.renamed_field = protobuf.json_stringv(jv)!
+				}
 			}
 			'packed' {
-				m.packed = GoogleProtobuf_Any.from_json_value(jv)!
+				if jv !is json2.Null {
+					m.packed = GoogleProtobuf_Any.from_json_value(jv)!
+				}
 			}
 			else {}
 		}
@@ -1127,10 +1196,10 @@ pub fn (m &GoogleProtobuf_Timestamp) json_value() json2.Any {
 
 pub fn GoogleProtobuf_Timestamp.from_json_value(a json2.Any) !GoogleProtobuf_Timestamp {
 	s := protobuf.json_stringv(a)!
-	t := time.parse_rfc3339(s) or { return error('protojson: bad timestamp `${s}`') }
+	secs, nanos := protobuf.parse_timestamp_rfc3339(s)!
 	return GoogleProtobuf_Timestamp{
-		seconds: t.unix()
-		nanos:   t.nanosecond
+		seconds: secs
+		nanos:   nanos
 	}
 }
 

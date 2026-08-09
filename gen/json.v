@@ -192,9 +192,6 @@ fn (mut g Gen) emit_json_methods(mut b strings.Builder, vname string, scope []st
 		b.writeln('\tobj := protobuf.json_object(a)!')
 		b.writeln('\tmut m := ${vname}{}')
 		b.writeln('\tfor jk, jv in obj {')
-		b.writeln('\t\tif jv is json2.Null {')
-		b.writeln('\t\t\tcontinue')
-		b.writeln('\t\t}')
 		b.writeln('\t\tmatch jk {')
 		for fld in m.fields {
 			g.emit_json_field_in(mut b, scope, vname, fld)!
@@ -264,7 +261,19 @@ fn (mut g Gen) emit_json_field_in(mut b strings.Builder, scope []string, vname s
 	name := sanitize(fld.name)
 	pattern := field_json_key_pattern(fld)
 	b.writeln('\t\t\t${pattern} {')
+	// JSON null means "leave at default" for every field EXCEPT a singular
+	// google.protobuf.Value, where null is a legitimate value (NullValue)
+	value_vn := g.vname_for('google.protobuf', [], 'Value')
+	is_singular := fld.oneof == '' && !fld.is_map && fld.label != .repeated
+	null_default := !(is_singular && info.kind == .message && info.vtype == value_vn)
+	if null_default {
+		b.writeln('\t\t\t\tif jv !is json2.Null {')
+	}
 	if fld.oneof != '' {
+		// protojson rejects more than one member of the same oneof
+		b.writeln('\t\t\t\tif m.${sanitize(fld.oneof)} != none {')
+		b.writeln("\t\t\t\t\treturn error('protojson: multiple values for oneof ${fld.oneof}')")
+		b.writeln('\t\t\t\t}')
 		b.writeln('\t\t\t\tm.${sanitize(fld.oneof)} = ${vname}_${camel(fld.name)}{')
 		b.writeln('\t\t\t\t\tvalue: ${g.json_field_parse(info, fld, 'jv')}')
 		b.writeln('\t\t\t\t}')
@@ -282,6 +291,9 @@ fn (mut g Gen) emit_json_field_in(mut b strings.Builder, scope []string, vname s
 		b.writeln('\t\t\t\tm.${name} = &box_${name}')
 	} else {
 		b.writeln('\t\t\t\tm.${name} = ${g.json_field_parse(info, fld, 'jv')}')
+	}
+	if null_default {
+		b.writeln('\t\t\t\t}')
 	}
 	b.writeln('\t\t\t}')
 }
@@ -368,10 +380,10 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 			b.writeln('')
 			b.writeln('pub fn ${vname}.from_json_value(a json2.Any) !${vname} {')
 			b.writeln('\ts := protobuf.json_stringv(a)!')
-			b.writeln("\tt := time.parse_rfc3339(s) or { return error('protojson: bad timestamp `\${s}`') }")
+			b.writeln('\tsecs, nanos := protobuf.parse_timestamp_rfc3339(s)!')
 			b.writeln('\treturn ${vname}{')
-			b.writeln('\t\tseconds: t.unix()')
-			b.writeln('\t\tnanos:   t.nanosecond')
+			b.writeln('\t\tseconds: secs')
+			b.writeln('\t\tnanos:   nanos')
 			b.writeln('\t}')
 			b.writeln('}')
 		}
