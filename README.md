@@ -146,7 +146,7 @@ path slows relative to Go.
 | `import` | cross-package references; foreign packages get a CamelCase prefix (`google.protobuf.Timestamp` → `GoogleProtobuf_Timestamp`) |
 | `Timestamp`, `Duration` | `as_time()`/`from_time()` ↔ `time.Time`, `as_duration()`/`from_duration()` ↔ `time.Duration` (saturating, like protobuf-go) |
 | unknown fields | preserved in `pb_unknown []u8`, re-emitted on encode — older schemas forward newer data losslessly |
-| `Any` | when `google/protobuf/any.proto` is imported, every message gets `m.to_any()` and `T.from_any(any)!` (binary pack/unpack; the caller names the target type, no registry needed) |
+| `Any` | when `google/protobuf/any.proto` is imported, every message gets `m.to_any()` and `T.from_any(any)!`; JSON does canonical `@type` expansion (fields spread for normal messages, `value`-wrapped for WKTs) via a resolver generated over the fileset — no runtime type registry |
 | `[deprecated = true]` | field carries V's `@[deprecated]` attribute — the compiler warns on cross-module use |
 | `service`/`rpc` | with `-grpc`: a `<Service>Client` (unary methods over `grpc.Client`) plus a `<Service>Handler` interface and dispatch struct for `grpc.ConnectServer` |
 
@@ -158,11 +158,12 @@ RFC 3339 timestamps, `"1.5s"` durations, unwrapped wrappers, `Struct` as
 plain JSON, camelCase field masks.
 
 Known edges, stated plainly: `map<bool, …>` is rejected (V maps cannot key
-on bool); `Any` pack/unpack is binary-only — its JSON still uses the plain
-`{typeUrl, value}` object form, since the canonical `@type` expansion needs
-a runtime type registry we don't have; unknown *JSON* keys are ignored on
-parse; V's `==` includes `pb_unknown`; recursion through singular message
-fields is rejected (repeated/map/oneof recursion is fine).
+on bool); an `Any` whose `type_url` names a type outside the generated
+fileset can't be JSON-expanded, so it degrades to a raw
+`{"@type", "value": <base64>}` form rather than erroring; unknown *JSON*
+keys are ignored on parse; V's `==` includes `pb_unknown`; recursion
+through singular message fields is rejected (repeated/map/oneof recursion
+is fine).
 
 ## How it's validated
 

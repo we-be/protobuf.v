@@ -64,9 +64,9 @@ fn test_parse_repo_protos() ! {
 	scalars := parse(os.read_file(os.join_path(root, 'interop', 'scalars.proto'))!)!
 	assert scalars.messages.len == 2
 	assert scalars.messages[1].name == 'Scalars'
-	assert scalars.messages[1].fields.len == 30
+	assert scalars.messages[1].fields.len == 31
 	assert scalars.messages[1].oneofs[0].arms == ['ci', 'cs', 'cn']
-	assert scalars.imports == ['google/protobuf/timestamp.proto']
+	assert scalars.imports == ['google/protobuf/timestamp.proto', 'google/protobuf/any.proto']
 	assert scalars.services[0].name == 'ScalarService'
 	assert scalars.services[0].methods[1].server_streaming
 	assert scalars.enums[0].name == 'Color'

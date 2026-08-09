@@ -6,6 +6,7 @@ syntax = "proto3";
 // protoc resolves this from its built-in pool; vpbgen from its embedded
 // copy — the oracle byte-compare proves the two agree
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
 
 option go_package = "example.com/jsoncheck/scalars";
 
@@ -56,6 +57,8 @@ message Scalars {
   // json_name override: protoc emits "customName", not the default
   // "renamedField" — the protojson oracle proves we match
   string renamed_field = 30 [json_name = "customName"];
+  // Any holding a Nested: proves @type expansion matches Go's protojson
+  google.protobuf.Any packed = 31;
 }
 
 // parsed into the AST (and type-checked) but emits no code yet; stub

@@ -167,6 +167,9 @@ fn gen_scalars(mut r Rng) Scalars {
 	if r.chance(60) {
 		s.renamed_field = r.strval()
 	}
+	if r.chance(50) {
+		s.packed = gen_nested(mut r).to_any()
+	}
 	if r.chance(60) {
 		match r.below(3) {
 			0 {
@@ -226,6 +229,10 @@ fn known_scalars() Scalars {
 		nanos:   999999999
 	}
 	s.renamed_field = 'via json_name'
+	s.packed = Nested{
+		name: 'packed'
+		num:  42
+	}.to_any()
 	return s
 }
 

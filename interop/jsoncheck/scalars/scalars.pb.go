@@ -13,6 +13,7 @@ package scalars
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -166,7 +167,9 @@ type Scalars struct {
 	Ts     *timestamppb.Timestamp `protobuf:"bytes,29,opt,name=ts,proto3" json:"ts,omitempty"`
 	// json_name override: protoc emits "customName", not the default
 	// "renamedField" — the protojson oracle proves we match
-	RenamedField  string `protobuf:"bytes,30,opt,name=renamed_field,json=customName,proto3" json:"renamed_field,omitempty"`
+	RenamedField string `protobuf:"bytes,30,opt,name=renamed_field,json=customName,proto3" json:"renamed_field,omitempty"`
+	// Any holding a Nested: proves @type expansion matches Go's protojson
+	Packed        *anypb.Any `protobuf:"bytes,31,opt,name=packed,proto3" json:"packed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -424,6 +427,13 @@ func (x *Scalars) GetRenamedField() string {
 	return ""
 }
 
+func (x *Scalars) GetPacked() *anypb.Any {
+	if x != nil {
+		return x.Packed
+	}
+	return nil
+}
+
 type isScalars_Choice interface {
 	isScalars_Choice()
 }
@@ -450,10 +460,10 @@ var File_scalars_proto protoreflect.FileDescriptor
 
 const file_scalars_proto_rawDesc = "" +
 	"\n" +
-	"\rscalars.proto\x1a\x1fgoogle/protobuf/timestamp.proto\".\n" +
+	"\rscalars.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19google/protobuf/any.proto\".\n" +
 	"\x06Nested\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
-	"\x03num\x18\x02 \x01(\x05R\x03num\"\xb1\a\n" +
+	"\x03num\x18\x02 \x01(\x05R\x03num\"\xdf\a\n" +
 	"\aScalars\x12\f\n" +
 	"\x01a\x18\x01 \x01(\x05R\x01a\x12\f\n" +
 	"\x01b\x18\x02 \x01(\x03R\x01b\x12\f\n" +
@@ -486,7 +496,8 @@ const file_scalars_proto_rawDesc = "" +
 	"\x02cn\x18\x1c \x01(\v2\a.NestedH\x00R\x02cn\x12*\n" +
 	"\x02ts\x18\x1d \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12!\n" +
 	"\rrenamed_field\x18\x1e \x01(\tR\n" +
-	"customName\x1a5\n" +
+	"customName\x12,\n" +
+	"\x06packed\x18\x1f \x01(\v2\x14.google.protobuf.AnyR\x06packed\x1a5\n" +
 	"\aMiEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a5\n" +
@@ -536,6 +547,7 @@ var file_scalars_proto_goTypes = []any{
 	nil,                           // 6: Scalars.McEntry
 	nil,                           // 7: Scalars.MbEntry
 	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(*anypb.Any)(nil),             // 9: google.protobuf.Any
 }
 var file_scalars_proto_depIdxs = []int32{
 	0,  // 0: Scalars.p:type_name -> Color
@@ -548,17 +560,18 @@ var file_scalars_proto_depIdxs = []int32{
 	7,  // 7: Scalars.mb:type_name -> Scalars.MbEntry
 	1,  // 8: Scalars.cn:type_name -> Nested
 	8,  // 9: Scalars.ts:type_name -> google.protobuf.Timestamp
-	1,  // 10: Scalars.MnEntry.value:type_name -> Nested
-	0,  // 11: Scalars.McEntry.value:type_name -> Color
-	2,  // 12: ScalarService.Roundtrip:input_type -> Scalars
-	1,  // 13: ScalarService.Watch:input_type -> Nested
-	2,  // 14: ScalarService.Roundtrip:output_type -> Scalars
-	2,  // 15: ScalarService.Watch:output_type -> Scalars
-	14, // [14:16] is the sub-list for method output_type
-	12, // [12:14] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	9,  // 10: Scalars.packed:type_name -> google.protobuf.Any
+	1,  // 11: Scalars.MnEntry.value:type_name -> Nested
+	0,  // 12: Scalars.McEntry.value:type_name -> Color
+	2,  // 13: ScalarService.Roundtrip:input_type -> Scalars
+	1,  // 14: ScalarService.Watch:input_type -> Nested
+	2,  // 15: ScalarService.Roundtrip:output_type -> Scalars
+	2,  // 16: ScalarService.Watch:output_type -> Scalars
+	15, // [15:17] is the sub-list for method output_type
+	13, // [13:15] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_scalars_proto_init() }

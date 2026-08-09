@@ -293,7 +293,63 @@ pub fn generate_set(fs FileSet, opts GenOpts) !string {
 			g.emit_message(mut b, [], m)!
 		}
 	}
+	// whole-fileset Any JSON resolver: dispatches type_url -> concrete
+	// type for canonical @type expansion. No runtime registry needed —
+	// every packable type is in this fileset, so a match covers them all.
+	if g.json {
+		if _ := g.any_vname() {
+			g.emit_any_json_resolver(mut b)
+		}
+	}
 	return b.str()
+}
+
+// pb_any_to_json / pb_any_from_json: the generated Any resolver, one match
+// arm per message in the fileset. `wrapped` = value-wrapped WKT form.
+fn (mut g Gen) emit_any_json_resolver(mut b strings.Builder) {
+	b.writeln('')
+	b.writeln('fn pb_any_to_json(pb_name string, pb_value []u8) !(json2.Any, bool) {')
+	b.writeln('\tmatch pb_name {')
+	for vname, loc in g.locs {
+		full := g.loc_full_name(loc)
+		wrapped := loc.pkg_str == 'google.protobuf' && wkt_value_wrapped(loc.msg.name)
+		b.writeln("\t\t'${full}' {")
+		b.writeln('\t\t\treturn ${vname}.decode(pb_value)!.json_value(), ${wrapped}')
+		b.writeln('\t\t}')
+	}
+	b.writeln("\t\telse { return error('protojson: unresolvable Any type `\${pb_name}`') }")
+	b.writeln('\t}')
+	b.writeln('}')
+	b.writeln('')
+	b.writeln('fn pb_any_from_json(pb_name string, pb_obj map[string]json2.Any) ![]u8 {')
+	b.writeln('\tmatch pb_name {')
+	for vname, loc in g.locs {
+		full := g.loc_full_name(loc)
+		wrapped := loc.pkg_str == 'google.protobuf' && wkt_value_wrapped(loc.msg.name)
+		b.writeln("\t\t'${full}' {")
+		if wrapped {
+			b.writeln("\t\t\tpb_v := pb_obj['value'] or { return error('protojson: Any of ${full} missing \"value\"') }")
+			b.writeln('\t\t\treturn ${vname}.from_json_value(pb_v)!.encode()')
+		} else {
+			b.writeln('\t\t\tmut pb_inner := pb_obj.clone()')
+			b.writeln("\t\t\tpb_inner.delete('@type')")
+			b.writeln('\t\t\treturn ${vname}.from_json_value(json2.Any(pb_inner))!.encode()')
+		}
+		b.writeln('\t\t}')
+	}
+	b.writeln("\t\telse { return error('protojson: unresolvable Any type `\${pb_name}`') }")
+	b.writeln('\t}')
+	b.writeln('}')
+}
+
+fn (g &Gen) loc_full_name(loc MsgLoc) string {
+	mut parts := []string{}
+	if loc.pkg_str != '' {
+		parts << loc.pkg_str
+	}
+	parts << loc.path
+	parts << loc.msg.name
+	return parts.join('.')
 }
 
 fn (mut g Gen) set_cur(f File) {

@@ -126,9 +126,16 @@ fn (mut g Gen) emit_enum_json(mut b strings.Builder, vname string, e Enum) {
 // wkt_json_form says which well-known types replace the generic object
 // mapping with a special JSON form
 fn wkt_json_form(name string) bool {
-	return name in ['Timestamp', 'Duration', 'Struct', 'Value', 'ListValue', 'FieldMask',
+	return name in ['Timestamp', 'Duration', 'Struct', 'Value', 'ListValue', 'FieldMask', 'Any',
 		'DoubleValue', 'FloatValue', 'Int64Value', 'UInt64Value', 'Int32Value', 'UInt32Value',
 		'BoolValue', 'StringValue', 'BytesValue']
+}
+
+// value-wrapped types use {"@type":..,"value":<json>} inside an Any; normal
+// messages spread their fields alongside "@type". Same set as the special
+// JSON forms, gated to the real google.protobuf package by the caller.
+fn wkt_value_wrapped(name string) bool {
+	return wkt_json_form(name)
 }
 
 fn (mut g Gen) emit_json_methods(mut b strings.Builder, vname string, scope []string, path []string, m Message) ! {
@@ -275,6 +282,52 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 	struct_v := g.vname_for('google.protobuf', [], 'Struct')
 	list_v := g.vname_for('google.protobuf', [], 'ListValue')
 	match name {
+		'Any' {
+			b.writeln('')
+			b.writeln('// canonical JSON: {"@type": url, ...fields} for normal messages,')
+			b.writeln('// {"@type": url, "value": <form>} for value-wrapped WKTs. Uses the')
+			b.writeln('// generated fileset resolver; unresolvable types degrade to a raw')
+			b.writeln('// base64 form rather than erroring (json_value cannot fail).')
+			b.writeln('pub fn (m &${vname}) json_value() json2.Any {')
+			b.writeln("\tif m.type_url == '' {")
+			b.writeln('\t\treturn json2.Any(map[string]json2.Any{})')
+			b.writeln('\t}')
+			b.writeln("\tname := m.type_url.all_after_last('/')")
+			b.writeln('\tinner, wrapped := pb_any_to_json(name, m.value) or {')
+			b.writeln('\t\tmut raw := map[string]json2.Any{}')
+			b.writeln("\t\traw['@type'] = json2.Any(m.type_url)")
+			b.writeln("\t\traw['value'] = protobuf.json_b64(m.value)")
+			b.writeln('\t\treturn json2.Any(raw)')
+			b.writeln('\t}')
+			b.writeln('\tmut o := map[string]json2.Any{}')
+			b.writeln("\to['@type'] = json2.Any(m.type_url)")
+			b.writeln('\tif wrapped {')
+			b.writeln("\t\to['value'] = inner")
+			b.writeln('\t} else if inner is map[string]json2.Any {')
+			b.writeln('\t\tfor k, v in inner {')
+			b.writeln('\t\t\to[k] = v')
+			b.writeln('\t\t}')
+			b.writeln('\t} else {')
+			b.writeln("\t\to['value'] = inner")
+			b.writeln('\t}')
+			b.writeln('\treturn json2.Any(o)')
+			b.writeln('}')
+			b.writeln('')
+			b.writeln('pub fn ${vname}.from_json_value(a json2.Any) !${vname} {')
+			b.writeln('\tobj := protobuf.json_object(a)!')
+			b.writeln('\tif obj.len == 0 {')
+			b.writeln('\t\treturn ${vname}{}')
+			b.writeln('\t}')
+			b.writeln('\ttu := obj[\'@type\'] or { return error(\'protojson: Any missing "@type"\') }')
+			b.writeln('\ttype_url := protobuf.json_stringv(tu)!')
+			b.writeln("\tname := type_url.all_after_last('/')")
+			b.writeln('\tvalue := pb_any_from_json(name, obj)!')
+			b.writeln('\treturn ${vname}{')
+			b.writeln('\t\ttype_url: type_url')
+			b.writeln('\t\tvalue:    value')
+			b.writeln('\t}')
+			b.writeln('}')
+		}
 		'Timestamp' {
 			b.writeln('')
 			b.writeln('// canonical JSON form: RFC 3339 in UTC')

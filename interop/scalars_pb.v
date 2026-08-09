@@ -95,6 +95,21 @@ pub fn Nested.decode(buf []u8) !Nested {
 	return m
 }
 
+pub fn (m &Nested) to_any() GoogleProtobuf_Any {
+	return GoogleProtobuf_Any{
+		type_url: 'type.googleapis.com/Nested'
+		value:    m.encode()
+	}
+}
+
+pub fn Nested.from_any(a GoogleProtobuf_Any) !Nested {
+	got := a.type_url.all_after_last('/')
+	if got != 'Nested' {
+		return error('protobuf: Any holds `${got}`, not `Nested`')
+	}
+	return Nested.decode(a.value)!
+}
+
 pub fn (m &Nested) json() string {
 	return m.json_value().json_str()
 }
@@ -181,6 +196,7 @@ pub mut:
 	choice        ?Scalars_Choice
 	ts            ?GoogleProtobuf_Timestamp
 	renamed_field string
+	packed        ?GoogleProtobuf_Any
 	pb_unknown    []u8 // unrecognized fields, re-emitted on encode
 }
 
@@ -290,6 +306,9 @@ pub fn (m &Scalars) encoded_size() int {
 	}
 	if m.renamed_field != '' {
 		n += protobuf.len_field_len(30, m.renamed_field.len)
+	}
+	if packed := m.packed {
+		n += protobuf.len_field_len(31, packed.encoded_size())
 	}
 	return n + m.pb_unknown.len
 }
@@ -452,6 +471,11 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 	}
 	if m.renamed_field != '' {
 		e.write_string_field(30, m.renamed_field)
+	}
+	if packed := m.packed {
+		e.write_tag(31, .len_delim)
+		e.write_varint(u64(packed.encoded_size()))
+		packed.encode_to(mut e)
 	}
 	e.write_raw(m.pb_unknown)
 }
@@ -643,6 +667,9 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 			30 {
 				m.renamed_field = d.read_string()!
 			}
+			31 {
+				m.packed = GoogleProtobuf_Any.decode(d.read_view()!)!
+			}
 			else {
 				d.skip(wt)!
 				m.pb_unknown << d.buf[tag_start..d.pos]
@@ -650,6 +677,21 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 		}
 	}
 	return m
+}
+
+pub fn (m &Scalars) to_any() GoogleProtobuf_Any {
+	return GoogleProtobuf_Any{
+		type_url: 'type.googleapis.com/Scalars'
+		value:    m.encode()
+	}
+}
+
+pub fn Scalars.from_any(a GoogleProtobuf_Any) !Scalars {
+	got := a.type_url.all_after_last('/')
+	if got != 'Scalars' {
+		return error('protobuf: Any holds `${got}`, not `Scalars`')
+	}
+	return Scalars.decode(a.value)!
 }
 
 pub fn (m &Scalars) json() string {
@@ -805,6 +847,9 @@ pub fn (m &Scalars) json_value() json2.Any {
 	if m.renamed_field != '' {
 		o['customName'] = json2.Any(m.renamed_field)
 	}
+	if packed := m.packed {
+		o['packed'] = packed.json_value()
+	}
 	return json2.Any(o)
 }
 
@@ -928,6 +973,9 @@ pub fn Scalars.from_json_value(a json2.Any) !Scalars {
 			'customName', 'renamed_field' {
 				m.renamed_field = protobuf.json_stringv(jv)!
 			}
+			'packed' {
+				m.packed = GoogleProtobuf_Any.from_json_value(jv)!
+			}
 			else {}
 		}
 	}
@@ -1012,6 +1060,21 @@ pub fn GoogleProtobuf_Timestamp.from_time(t time.Time) GoogleProtobuf_Timestamp 
 	}
 }
 
+pub fn (m &GoogleProtobuf_Timestamp) to_any() GoogleProtobuf_Any {
+	return GoogleProtobuf_Any{
+		type_url: 'type.googleapis.com/google.protobuf.Timestamp'
+		value:    m.encode()
+	}
+}
+
+pub fn GoogleProtobuf_Timestamp.from_any(a GoogleProtobuf_Any) !GoogleProtobuf_Timestamp {
+	got := a.type_url.all_after_last('/')
+	if got != 'google.protobuf.Timestamp' {
+		return error('protobuf: Any holds `${got}`, not `google.protobuf.Timestamp`')
+	}
+	return GoogleProtobuf_Timestamp.decode(a.value)!
+}
+
 pub fn (m &GoogleProtobuf_Timestamp) json() string {
 	return m.json_value().json_str()
 }
@@ -1042,5 +1105,187 @@ pub fn GoogleProtobuf_Timestamp.from_json_value(a json2.Any) !GoogleProtobuf_Tim
 	return GoogleProtobuf_Timestamp{
 		seconds: t.unix()
 		nanos:   t.nanosecond
+	}
+}
+
+pub struct GoogleProtobuf_Any {
+pub mut:
+	type_url   string
+	value      []u8
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
+}
+
+pub fn (m &GoogleProtobuf_Any) encoded_size() int {
+	mut n := 0
+	if m.type_url != '' {
+		n += protobuf.len_field_len(1, m.type_url.len)
+	}
+	if m.value.len > 0 {
+		n += protobuf.len_field_len(2, m.value.len)
+	}
+	return n + m.pb_unknown.len
+}
+
+pub fn (m &GoogleProtobuf_Any) encode_to(mut e protobuf.Encoder) {
+	if m.type_url != '' {
+		e.write_string_field(1, m.type_url)
+	}
+	if m.value.len > 0 {
+		e.write_bytes_field(2, m.value)
+	}
+	e.write_raw(m.pb_unknown)
+}
+
+pub fn (m &GoogleProtobuf_Any) encode() []u8 {
+	mut e := protobuf.Encoder{
+		buf: []u8{cap: m.encoded_size()}
+	}
+	m.encode_to(mut e)
+	return e.buf
+}
+
+pub fn GoogleProtobuf_Any.decode(buf []u8) !GoogleProtobuf_Any {
+	mut m := GoogleProtobuf_Any{}
+	mut d := protobuf.Decoder{
+		buf: buf
+	}
+	for d.more() {
+		tag_start := d.pos
+		field, wt := d.read_tag()!
+		match field {
+			1 {
+				m.type_url = d.read_string()!
+			}
+			2 {
+				m.value = d.read_bytes()!
+			}
+			else {
+				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
+			}
+		}
+	}
+	return m
+}
+
+// the packed message type name (the type_url after the last /)
+pub fn (m &GoogleProtobuf_Any) type_name() string {
+	return m.type_url.all_after_last('/')
+}
+
+pub fn (m &GoogleProtobuf_Any) to_any() GoogleProtobuf_Any {
+	return GoogleProtobuf_Any{
+		type_url: 'type.googleapis.com/google.protobuf.Any'
+		value:    m.encode()
+	}
+}
+
+pub fn GoogleProtobuf_Any.from_any(a GoogleProtobuf_Any) !GoogleProtobuf_Any {
+	got := a.type_url.all_after_last('/')
+	if got != 'google.protobuf.Any' {
+		return error('protobuf: Any holds `${got}`, not `google.protobuf.Any`')
+	}
+	return GoogleProtobuf_Any.decode(a.value)!
+}
+
+pub fn (m &GoogleProtobuf_Any) json() string {
+	return m.json_value().json_str()
+}
+
+pub fn GoogleProtobuf_Any.from_json(s string) !GoogleProtobuf_Any {
+	return GoogleProtobuf_Any.from_json_value(protobuf.json_parse(s)!)
+}
+
+// canonical JSON: {"@type": url, ...fields} for normal messages,
+// {"@type": url, "value": <form>} for value-wrapped WKTs. Uses the
+// generated fileset resolver; unresolvable types degrade to a raw
+// base64 form rather than erroring (json_value cannot fail).
+pub fn (m &GoogleProtobuf_Any) json_value() json2.Any {
+	if m.type_url == '' {
+		return json2.Any(map[string]json2.Any{})
+	}
+	name := m.type_url.all_after_last('/')
+	inner, wrapped := pb_any_to_json(name, m.value) or {
+		mut raw := map[string]json2.Any{}
+		raw['@type'] = json2.Any(m.type_url)
+		raw['value'] = protobuf.json_b64(m.value)
+		return json2.Any(raw)
+	}
+	mut o := map[string]json2.Any{}
+	o['@type'] = json2.Any(m.type_url)
+	if wrapped {
+		o['value'] = inner
+	} else if inner is map[string]json2.Any {
+		for k, v in inner {
+			o[k] = v
+		}
+	} else {
+		o['value'] = inner
+	}
+	return json2.Any(o)
+}
+
+pub fn GoogleProtobuf_Any.from_json_value(a json2.Any) !GoogleProtobuf_Any {
+	obj := protobuf.json_object(a)!
+	if obj.len == 0 {
+		return GoogleProtobuf_Any{}
+	}
+	tu := obj['@type'] or { return error('protojson: Any missing "@type"') }
+	type_url := protobuf.json_stringv(tu)!
+	name := type_url.all_after_last('/')
+	value := pb_any_from_json(name, obj)!
+	return GoogleProtobuf_Any{
+		type_url: type_url
+		value:    value
+	}
+}
+
+fn pb_any_to_json(pb_name string, pb_value []u8) !(json2.Any, bool) {
+	match pb_name {
+		'Nested' {
+			return Nested.decode(pb_value)!.json_value(), false
+		}
+		'Scalars' {
+			return Scalars.decode(pb_value)!.json_value(), false
+		}
+		'google.protobuf.Timestamp' {
+			return GoogleProtobuf_Timestamp.decode(pb_value)!.json_value(), true
+		}
+		'google.protobuf.Any' {
+			return GoogleProtobuf_Any.decode(pb_value)!.json_value(), true
+		}
+		else {
+			return error('protojson: unresolvable Any type `${pb_name}`')
+		}
+	}
+}
+
+fn pb_any_from_json(pb_name string, pb_obj map[string]json2.Any) ![]u8 {
+	match pb_name {
+		'Nested' {
+			mut pb_inner := pb_obj.clone()
+			pb_inner.delete('@type')
+			return Nested.from_json_value(json2.Any(pb_inner))!.encode()
+		}
+		'Scalars' {
+			mut pb_inner := pb_obj.clone()
+			pb_inner.delete('@type')
+			return Scalars.from_json_value(json2.Any(pb_inner))!.encode()
+		}
+		'google.protobuf.Timestamp' {
+			pb_v := pb_obj['value'] or {
+				return error('protojson: Any of google.protobuf.Timestamp missing "value"')
+			}
+			return GoogleProtobuf_Timestamp.from_json_value(pb_v)!.encode()
+		}
+		'google.protobuf.Any' {
+			pb_v := pb_obj['value'] or {
+				return error('protojson: Any of google.protobuf.Any missing "value"')
+			}
+			return GoogleProtobuf_Any.from_json_value(pb_v)!.encode()
+		}
+		else {
+			return error('protojson: unresolvable Any type `${pb_name}`')
+		}
 	}
 }
