@@ -79,10 +79,10 @@ pub mut:
 	deprecated bool   // [deprecated = true]
 }
 
-// integral and string types; proto3 also allows bool, but V maps cannot
-// key on bool, so it is rejected at parse
+// integral, bool, and string types. proto3 allows bool keys; V maps cannot
+// key on bool, so codegen stores map<bool,V> as map[int]V (0=false, 1=true).
 const map_key_types = ['int32', 'int64', 'uint32', 'uint64', 'sint32', 'sint64', 'fixed32', 'fixed64',
-	'sfixed32', 'sfixed64', 'string']
+	'sfixed32', 'sfixed64', 'bool', 'string']
 
 enum TokenKind {
 	ident
@@ -481,9 +481,6 @@ fn (mut p Parser) parse_field() !Field {
 		}
 		p.expect_punct('<')!
 		kt := p.expect_ident()!
-		if kt.lit == 'bool' {
-			return error('line ${kt.line}: map<bool, ...> is not supported (V maps cannot key on bool)')
-		}
 		if kt.lit !in map_key_types {
 			return error('line ${kt.line}: invalid map key type `${kt.lit}`')
 		}

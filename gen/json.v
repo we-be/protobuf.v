@@ -39,12 +39,17 @@ fn json_map_key_emit(key_typ string) string {
 	if key_typ == 'string' {
 		return 'k'
 	}
+	// bool keys are stored as int (0/1) but protojson keys them "false"/"true"
+	if key_typ == 'bool' {
+		return "if k != 0 { 'true' } else { 'false' }"
+	}
 	return 'k.str()'
 }
 
 fn json_map_key_parse(key_typ string) string {
 	return match key_typ {
 		'string' { 'mk' }
+		'bool' { "if mk == 'true' { 1 } else { 0 }" }
 		'int32', 'sint32', 'sfixed32' { 'int(protobuf.json_key_i64(mk)!)' }
 		'int64', 'sint64', 'sfixed64' { 'protobuf.json_key_i64(mk)!' }
 		'uint32', 'fixed32' { 'u32(protobuf.json_key_u64(mk)!)' }

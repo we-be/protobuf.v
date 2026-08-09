@@ -212,6 +212,36 @@ fn zero_literal(t string) string {
 	}
 }
 
+// V map container key type. proto bool cannot key a V map, so bool keys are
+// stored as int (0=false, 1=true); every other key maps to its V scalar type.
+// The wire and JSON forms stay true to `bool` — only the in-memory key differs.
+fn map_key_v_type(key_typ string) string {
+	return if key_typ == 'bool' { 'int' } else { v_scalar_type(key_typ) }
+}
+
+// encode expr for map-entry key (field 1); `k` is the V key value.
+fn map_key_write(key_typ string) string {
+	return if key_typ == 'bool' {
+		'e.write_bool_field(1, k != 0)'
+	} else {
+		'e.${tagged_writer(key_typ)}(1, k)'
+	}
+}
+
+// decode expr yielding the V key value from map-entry field 1.
+fn map_key_read(key_typ string) string {
+	return if key_typ == 'bool' {
+		'if sub.read_bool()! { 1 } else { 0 }'
+	} else {
+		'sub.${scalar_reader(key_typ)}()!'
+	}
+}
+
+// zero value for the V key type.
+fn map_key_zero(key_typ string) string {
+	return if key_typ == 'bool' { '0' } else { zero_literal(key_typ) }
+}
+
 // one serialized map entry: key field 1 + value field 2, both always
 // written (protoc does the same, even for defaults)
 fn map_entry_size_expr(fld Field, info FieldInfo) string {
@@ -601,7 +631,7 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 		info := g.field_info(scope, vname, fld)!
 		mut t := info.vtype
 		if fld.is_map {
-			t = 'map[${v_scalar_type(fld.key_typ)}]${t}'
+			t = 'map[${map_key_v_type(fld.key_typ)}]${t}'
 		} else if fld.label == .repeated {
 			t = '[]${t}'
 		} else if fld.label == .optional || info.kind == .message {
@@ -822,7 +852,7 @@ fn (mut g Gen) emit_encode_field(mut b strings.Builder, scope []string, vname st
 		b.writeln('\t\t\tv := m.${name}[k]')
 		b.writeln('\t\t\te.write_tag(${n}, .len_delim)')
 		b.writeln('\t\t\te.write_varint(u64(${map_entry_size_expr(fld, info)}))')
-		b.writeln('\t\t\te.${tagged_writer(fld.key_typ)}(1, k)')
+		b.writeln('\t\t\t${map_key_write(fld.key_typ)}')
 		b.writeln('\t\t\t${val_write}')
 		b.writeln('\t\t}')
 		b.writeln('\t}')
@@ -1057,12 +1087,12 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 		b.writeln('\t\t\t\tmut sub := protobuf.Decoder{')
 		b.writeln('\t\t\t\t\tbuf: d.read_view()!')
 		b.writeln('\t\t\t\t}')
-		b.writeln('\t\t\t\tmut mk := ${zero_literal(fld.key_typ)}')
+		b.writeln('\t\t\t\tmut mk := ${map_key_zero(fld.key_typ)}')
 		b.writeln('\t\t\t\tmut mv := ${val_zero}')
 		b.writeln('\t\t\t\tfor sub.more() {')
 		b.writeln('\t\t\t\t\tmf, mw := sub.read_tag()!')
 		b.writeln('\t\t\t\t\tmatch mf {')
-		b.writeln('\t\t\t\t\t\t1 { mk = sub.${scalar_reader(fld.key_typ)}()! }')
+		b.writeln('\t\t\t\t\t\t1 { mk = ${map_key_read(fld.key_typ)} }')
 		b.writeln('\t\t\t\t\t\t2 { mv = ${val_read} }')
 		b.writeln('\t\t\t\t\t\telse { sub.skip(mw)! }')
 		b.writeln('\t\t\t\t\t}')

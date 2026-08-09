@@ -96,8 +96,6 @@ fn test_rejections() {
 	expect_parse_error('syntax = "proto3"; message M { oneof x { } }', 'has no fields')
 	expect_parse_error('syntax = "proto3"; message M { repeated map<string, int32> m = 1; }',
 		'cannot be repeated')
-	expect_parse_error('syntax = "proto3"; message M { map<bool, int32> m = 1; }',
-		'cannot key on bool')
 	expect_parse_error('syntax = "proto3"; message M { map<float, int32> m = 1; }',
 		'invalid map key type')
 	expect_parse_error('syntax = "proto3"; message M { map<bytes, int32> m = 1; }',
@@ -226,10 +224,11 @@ fn test_map_fields() ! {
 	f := parse('syntax = "proto3"; message M {
 	map<string, int32> tags = 1;
 	map<sint64, Nested> refs = 2;
+	map<bool, int32> flags = 3;
 	message Nested { int32 x = 1; }
 }')!
 	m := f.messages[0]
-	assert m.fields.len == 2
+	assert m.fields.len == 3
 	assert m.fields[0].is_map
 	assert m.fields[0].key_typ == 'string'
 	assert m.fields[0].typ == 'int32'
@@ -237,6 +236,8 @@ fn test_map_fields() ! {
 	assert m.fields[1].key_typ == 'sint64'
 	assert m.fields[1].typ == 'Nested'
 	assert m.fields[1].number == 2
+	// bool keys are accepted (codegen lowers them to map[int]V)
+	assert m.fields[2].is_map && m.fields[2].key_typ == 'bool'
 }
 
 fn test_enum_negative_and_options() ! {

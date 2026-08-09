@@ -268,6 +268,59 @@ message Outer {
 	assert res.output.contains('QUAL OK'), res.output
 }
 
+fn test_map_bool_key_e2e() ! {
+	// map<bool,V> has no V map-key type, so it is stored as map[int]V
+	// (0=false, 1=true) yet stays true to bool on the wire and in JSON.
+	f := parse('syntax = "proto3";
+message Nested { int32 v = 1; }
+message Rec {
+	map<bool, int32> flags = 1;
+	map<bool, string> names = 2;
+	map<bool, Nested> nodes = 3;
+}')!
+	code := generate(f, GenOpts{ json: true })!
+	assert code.contains('flags map[int]int')
+	assert code.contains('names map[int]string')
+	assert code.contains('nodes map[int]Nested')
+	dir := os.join_path(os.temp_dir(), 'vpbgen_boolmap_${os.getpid()}')
+	os.mkdir_all(dir)!
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	os.write_file(os.join_path(dir, 'b_pb.v'), code)!
+	os.write_file(os.join_path(dir, 'main.v'), "fn main() {
+	m := Rec{
+		flags: {
+			0: 10
+			1: 20
+		}
+		names: {
+			1: 'yes'
+		}
+		nodes: {
+			0: Nested{
+				v: 5
+			}
+		}
+	}
+	// wire roundtrip, deterministic (false entry precedes true)
+	enc := m.encode()
+	m2 := Rec.decode(enc) or { panic(err) }
+	assert m2 == m
+	assert m2.encode() == enc
+	// JSON roundtrip with canonical bool keys
+	js := m.json()
+	assert js.contains('\"false\"') && js.contains('\"true\"'), js
+	m3 := Rec.from_json(js) or { panic(err) }
+	assert m3 == m
+	println('BOOLMAP OK')
+}")!
+	vexe := os.getenv_opt('VEXE') or { 'v' }
+	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	assert res.exit_code == 0, res.output
+	assert res.output.contains('BOOLMAP OK'), res.output
+}
+
 fn test_deprecated_field_annotation() ! {
 	f := parse('syntax = "proto3"; message M {
 	int32 keep = 1;
