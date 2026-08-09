@@ -101,6 +101,8 @@ jobs:
       - name: Benchmark with regression gate
         run: MAX_ENCODE_RATIO=1.1 MAX_DECODE_RATIO=1.9 ./bench/run.sh /tmp/bench-results.md
 
-      - name: Publish table to job summary
+      # to the job summary and the step log, so the runner's V/Go ratios
+      # are visible without opening the summary page
+      - name: Publish benchmark table
         if: always()
-        run: cat /tmp/bench-results.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+        run: cat /tmp/bench-results.md | tee -a "$GITHUB_STEP_SUMMARY" 2>/dev/null || cat /tmp/bench-results.md || true
