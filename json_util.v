@@ -79,7 +79,10 @@ pub fn json_array(a json2.Any) ![]json2.Any {
 
 pub fn json_stringv(a json2.Any) !string {
 	if a is string {
-		return a
+		// clone: json2's string values can be windows into a decode buffer that
+		// is later reused, which corrupts map/repeated string values once the
+		// parse returns (observed on macOS/arm64). An owned copy is safe.
+		return a.clone()
 	}
 	return error('protojson: expected string, got ${a.type_name()}')
 }

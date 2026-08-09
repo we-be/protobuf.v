@@ -524,7 +524,7 @@ fn (mut g Gen) emit_wkt_json(mut b strings.Builder, vname string, name string) {
 			b.writeln('\t\tstring {')
 			b.writeln('\t\t\treturn ${vname}{')
 			b.writeln('\t\t\t\tkind: ${vname}_StringValue{')
-			b.writeln('\t\t\t\t\tvalue: a')
+			b.writeln('\t\t\t\t\tvalue: a.clone()')
 			b.writeln('\t\t\t\t}')
 			b.writeln('\t\t\t}')
 			b.writeln('\t\t}')
