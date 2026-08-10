@@ -12,6 +12,20 @@ mappings, and generated enums/oneof sum types — together with `protobuf.Encode
 `protobuf.json_*` helpers are `pub` only so generated code can call them across
 modules; they are runtime-internal and not covered by the semver contract.
 
+## [1.2.0] - 2026-08-10
+
+### Changed
+- **gRPC/Connect server glue (`vpbgen -grpc`)** now threads a
+  `grpc.ServerContext` through the generated handler and dispatch: each method
+  is `fn (mut h H) rpc(mut ctx grpc.ServerContext, req In) !Out` (was
+  `(req In) !Out`), and `<Svc>Service.call` gains a trailing
+  `mut ctx grpc.ServerContext`. Handlers can now read request metadata and set
+  response headers, trailers, and typed error details. Requires grpc.v with
+  `ServerContext` (≥ the Gate 3 metadata release).
+
+As with 1.1.0, the generated gRPC-stub *shape* is outside protobuf.v's frozen
+1.0 message API, so this ships as a minor.
+
 ## [1.1.1] - 2026-08-10
 
 ### Fixed

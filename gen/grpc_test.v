@@ -21,10 +21,12 @@ message GetResponse { bytes value = 1; }')!
 	assert !code.contains('watch_all(')
 	// Connect server glue: handler interface + dispatch struct, unary only
 	assert code.contains('pub interface KVHandler {')
-	assert code.contains('\tget(req GetRequest) !GetResponse')
+	assert code.contains('\tget(mut ctx grpc.ServerContext, req GetRequest) !GetResponse')
 	assert code.contains('pub struct KVService {')
-	assert code.contains('pub fn (mut s KVService) call(path string, codec grpc.Codec, body []u8) !([]u8, bool) {')
+	assert code.contains('pub fn (mut s KVService) call(path string, codec grpc.Codec, body []u8, mut ctx grpc.ServerContext) !([]u8, bool) {')
 	assert code.contains("'/kv.KV/Get' {")
+	// the dispatch threads the context through to the handler
+	assert code.contains('s.h.get(mut ctx, req)!')
 	// without -json the JSON codec is refused at runtime
 	assert code.contains('JSON codec unavailable')
 	jcode := generate_grpc_set(FileSet{ root: f, files: [f] }, GenOpts{

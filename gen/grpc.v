@@ -112,7 +112,7 @@ fn (mut g Gen) emit_connect_service(mut b strings.Builder, svc Service, prefix s
 	for m in unary {
 		in_sym := g.resolve_in_pkg([], m.input) or { return error('unreachable') }
 		out_sym := g.resolve_in_pkg([], m.output) or { return error('unreachable') }
-		b.writeln('\t${sanitize(snake(m.name))}(req ${in_sym.vname}) !${out_sym.vname}')
+		b.writeln('\t${sanitize(snake(m.name))}(mut ctx grpc.ServerContext, req ${in_sym.vname}) !${out_sym.vname}')
 	}
 	b.writeln('}')
 	b.writeln('')
@@ -121,7 +121,7 @@ fn (mut g Gen) emit_connect_service(mut b strings.Builder, svc Service, prefix s
 	b.writeln('\th ${svc.name}Handler')
 	b.writeln('}')
 	b.writeln('')
-	b.writeln('pub fn (mut s ${svc.name}Service) call(path string, codec grpc.Codec, body []u8) !([]u8, bool) {')
+	b.writeln('pub fn (mut s ${svc.name}Service) call(path string, codec grpc.Codec, body []u8, mut ctx grpc.ServerContext) !([]u8, bool) {')
 	b.writeln('\tmatch path {')
 	for m in unary {
 		in_sym := g.resolve_in_pkg([], m.input) or { return error('unreachable') }
@@ -143,7 +143,7 @@ fn (mut g Gen) emit_connect_service(mut b strings.Builder, svc Service, prefix s
 			b.writeln('\t\t\t}')
 			b.writeln('\t\t\treq := ${in_sym.vname}.decode(body)!')
 		}
-		b.writeln('\t\t\tresp := s.h.${sanitize(snake(m.name))}(req)!')
+		b.writeln('\t\t\tresp := s.h.${sanitize(snake(m.name))}(mut ctx, req)!')
 		if g.json {
 			b.writeln('\t\t\tout := if codec == .json {')
 			b.writeln('\t\t\t\tresp.json()!.bytes()')
