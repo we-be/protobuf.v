@@ -154,6 +154,20 @@ fn test_generate_structure() ! {
 	assert code.contains('contact ?Person_Contact')
 }
 
+fn test_reserved_type_names_mangled() ! {
+	// a message whose V name would collide with a builtin type (Error) is
+	// renamed with a trailing underscore so the code compiles; the wire
+	// type_url still uses the proto name.
+	f := parse('syntax = "proto3";
+message Error { int32 code = 1; }
+message Wrap { Error err = 1; }')!
+	code := generate(f, GenOpts{})!
+	assert code.contains('pub struct Error_ {')
+	assert code.contains('pub fn Error_.decode(buf []u8) !Error_ {')
+	assert code.contains('err ?Error_')
+	assert !code.contains('pub struct Error {')
+}
+
 fn test_generated_roundtrip() ! {
 	f := parse(demo_src)!
 	code := generate(f, GenOpts{})!

@@ -403,13 +403,23 @@ fn (mut g Gen) set_cur(f File) {
 // V type name for a definition: root-package types keep bare flattened
 // names; foreign packages get a CamelCased package prefix so two packages
 // can define the same message name
+// V builtin type/interface names a generated proto type must not shadow.
+// A clash gets a trailing `_`, mirroring sanitize's keyword handling. The
+// wire type_url is unaffected (it uses the proto name, not the V name).
+const v_reserved_types = ['Error', 'IError', 'Option', 'Result']
+
 fn (g &Gen) vname_for(pkg string, path []string, name string) string {
 	base := v_type_name(path, name)
-	if pkg == g.root_pkg {
-		return base
+	final := if pkg == g.root_pkg {
+		base
+	} else {
+		prefix := pkg.split('.').map(camel(it)).join('')
+		'${prefix}_${base}'
 	}
-	prefix := pkg.split('.').map(camel(it)).join('')
-	return '${prefix}_${base}'
+	if final in v_reserved_types {
+		return final + '_'
+	}
+	return final
 }
 
 fn qualify(path []string, name string) string {

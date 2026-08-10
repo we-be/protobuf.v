@@ -12,6 +12,16 @@ mappings, and generated enums/oneof sum types — together with `protobuf.Encode
 `protobuf.json_*` helpers are `pub` only so generated code can call them across
 modules; they are runtime-internal and not covered by the semver contract.
 
+## [1.2.1] - 2026-08-10
+
+### Fixed
+- **Reserved V type names.** A message whose generated V name would collide
+  with a V builtin type (`Error`, `IError`, `Option`, `Result`) now gets a
+  trailing underscore (`Error` → `Error_`), mirroring how field names dodge
+  keywords, so such schemas compile. The wire `type_url` is unchanged.
+  Surfaced generating the Connect conformance suite's protos, which define a
+  message named `Error`.
+
 ## [1.2.0] - 2026-08-10
 
 ### Changed
