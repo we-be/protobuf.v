@@ -39,6 +39,22 @@ fn test_unbalanced_rejected() {
 	}
 }
 
+fn test_bare_scalars_and_empty_never_crash_json2() {
+	// these previously crashed json2 (a past-EOF substr in its checker_error)
+	// or are otherwise not a JSON value; json_parse must ERROR, never panic
+	for s in ['', ' ', '\t\n', 'x', '-', '1e', '1.', '1E+', '1e+', 'tru', 't', 'nul', 'n',
+		'fals', '01', '.5', '+1', '1 2', '--1'] {
+		if _ := json_parse(s) {
+			assert false, 'accepted invalid scalar `${s}`'
+		}
+	}
+	// valid bare scalars and containers still parse
+	for s in ['true', 'false', 'null', '0', '-1', '1.5', '2e10', '-3.14e-2', '"hi"', '{}',
+		'[]', '{"a":1}', '  42  '] {
+		json_parse(s) or { assert false, 'rejected valid `${s}`: ${err.msg()}' }
+	}
+}
+
 fn test_brackets_inside_strings_are_fine() {
 	v := json_parse('{"a":"}{][","b":"\\"[","c":1}') or {
 		assert false, err.msg()

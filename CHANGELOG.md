@@ -12,6 +12,17 @@ mappings, and generated enums/oneof sum types — together with `protobuf.Encode
 `protobuf.json_*` helpers are `pub` only so generated code can call them across
 modules; they are runtime-internal and not covered by the semver contract.
 
+## [1.1.1] - 2026-08-10
+
+### Fixed
+- **Hostile-input crash in JSON parsing.** A bare top-level scalar or empty
+  document (e.g. `1e`, `-`, `x`, `""`) could drive V's json2 checker past EOF
+  and crash its error formatter (a `substr` underflow) instead of returning an
+  error — a denial-of-service reachable through `from_json` and the gRPC
+  Connect JSON codec. `json_precheck` now rejects empty input and fully
+  validates bare scalars (numbers via the JSON grammar; `true`/`false`/`null`)
+  before json2 sees them. Surfaced by grpc.v's Gate 2 fuzzing.
+
 ## [1.1.0] - 2026-08-09
 
 ### Changed
@@ -118,6 +129,7 @@ Initial proto3 wire runtime and `vpbgen` code generation: messages, nested
 types, enums (open), scalars, `optional`, `repeated`/`packed`, `map<K,V>`, and
 `oneof` (sum types), with a protoc byte-oracle and adversarial fuzzing.
 
+[1.1.1]: https://github.com/we-be/protobuf.v/releases/tag/v1.1.1
 [1.1.0]: https://github.com/we-be/protobuf.v/releases/tag/v1.1.0
 [1.0.0]: https://github.com/we-be/protobuf.v/releases/tag/v1.0.0
 [0.7.0]: https://github.com/we-be/protobuf.v/releases/tag/v0.7.0

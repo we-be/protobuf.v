@@ -61,6 +61,64 @@ fn json_precheck(src string) ! {
 	if depth != 0 || in_str {
 		return error('protojson: truncated document')
 	}
+	// A bare top-level scalar (number / true / false / null) or an empty
+	// document can drive json2 past EOF and crash its error formatter (a
+	// substr underflow, json2 check.v). Containers and strings were just
+	// validated as balanced+terminated, so json2 stops at their close; only
+	// bare scalars and the empty document need a full check here.
+	body := src.trim_space()
+	if body == '' {
+		return error('protojson: empty JSON document')
+	}
+	c0 := body[0]
+	if c0 != `{` && c0 != `[` && c0 != `"` {
+		if body != 'true' && body != 'false' && body != 'null' && !is_json_number(body) {
+			return error('protojson: not a valid JSON value')
+		}
+	}
+}
+
+// validates the JSON number grammar: -?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?
+fn is_json_number(s string) bool {
+	mut i := 0
+	n := s.len
+	if i < n && s[i] == `-` {
+		i++
+	}
+	if i >= n {
+		return false
+	}
+	if s[i] == `0` {
+		i++
+	} else if s[i] >= `1` && s[i] <= `9` {
+		for i < n && s[i] >= `0` && s[i] <= `9` {
+			i++
+		}
+	} else {
+		return false
+	}
+	if i < n && s[i] == `.` {
+		i++
+		if i >= n || !(s[i] >= `0` && s[i] <= `9`) {
+			return false
+		}
+		for i < n && s[i] >= `0` && s[i] <= `9` {
+			i++
+		}
+	}
+	if i < n && (s[i] == `e` || s[i] == `E`) {
+		i++
+		if i < n && (s[i] == `+` || s[i] == `-`) {
+			i++
+		}
+		if i >= n || !(s[i] >= `0` && s[i] <= `9`) {
+			return false
+		}
+		for i < n && s[i] >= `0` && s[i] <= `9` {
+			i++
+		}
+	}
+	return i == n
 }
 
 pub fn json_object(a json2.Any) !map[string]json2.Any {
