@@ -2,11 +2,16 @@ module gen
 
 import strings
 
-// gRPC client stub generator: one <Service>Client struct per service with
-// a method per unary rpc, calling grpc.Client.unary with the full method
-// path. Streaming rpcs are skipped with a comment until the transport
-// grows streaming. Stubs share the message code's module, so request and
-// response types resolve without imports.
+// gRPC stub generator. Per service: a <Service>Client with a method per rpc, a
+// <Service>Handler interface, and a <Service>Service dispatch struct.
+//
+// Two dispatch entry points share one handler: call() serves the Connect
+// unary path (proto+json, one message in/out) and is used by grpc.ConnectServer;
+// grpc_call() serves native gRPC (proto only, a list of messages in/out) and is
+// used by grpc.GrpcServer. Streaming is buffered — a server-streaming rpc
+// returns []Resp, a client-streaming rpc takes []Req — which the one-shot HTTP
+// handler can express by carrying multiple gRPC frames in one body.
+// Bidirectional streaming needs true incremental framing and is still skipped.
 
 // CamelCase rpc name to a V method name: WatchAll -> watch_all
 fn snake(name string) string {
@@ -68,51 +73,88 @@ pub fn generate_grpc_set(fs FileSet, opts GenOpts) !string {
 				return error('service ${svc.name}: rpc ${m.name} types must be messages')
 			}
 			b.writeln('')
-			if m.client_streaming || m.server_streaming {
-				dir := if m.client_streaming && m.server_streaming {
-					'bidirectional'
-				} else if m.client_streaming {
-					'client'
-				} else {
-					'server'
-				}
-				b.writeln('// rpc ${m.name} skipped: ${dir} streaming is not supported yet')
+			if m.client_streaming && m.server_streaming {
+				b.writeln('// rpc ${m.name} skipped: bidirectional streaming is not supported yet')
 				continue
 			}
-			b.writeln('pub fn (mut x ${svc.name}Client) ${sanitize(snake(m.name))}(req ${in_sym.vname}, opts ...grpc.CallOption) !grpc.Reply[${out_sym.vname}] {')
-			b.writeln("\traw := x.c.unary('${prefix}${m.name}', req.encode(), ...opts)!")
-			b.writeln('\treturn grpc.Reply[${out_sym.vname}]{')
-			b.writeln('\t\tmsg:      ${out_sym.vname}.decode(raw.payload)!')
-			b.writeln('\t\tmetadata: raw.metadata')
-			b.writeln('\t}')
-			b.writeln('}')
+			method := sanitize(snake(m.name))
+			path := '${prefix}${m.name}'
+			if m.server_streaming {
+				// one request, the whole response stream buffered into a list
+				b.writeln('pub fn (mut x ${svc.name}Client) ${method}(req ${in_sym.vname}, opts ...grpc.CallOption) !grpc.Reply[[]${out_sym.vname}] {')
+				b.writeln("\traw := x.c.server_stream('${path}', req.encode(), ...opts)!")
+				b.writeln('\tmut msgs := []${out_sym.vname}{cap: raw.payloads.len}')
+				b.writeln('\tfor p in raw.payloads {')
+				b.writeln('\t\tmsgs << ${out_sym.vname}.decode(p)!')
+				b.writeln('\t}')
+				b.writeln('\treturn grpc.Reply[[]${out_sym.vname}]{')
+				b.writeln('\t\tmsg:      msgs')
+				b.writeln('\t\tmetadata: raw.metadata')
+				b.writeln('\t}')
+				b.writeln('}')
+			} else if m.client_streaming {
+				// the whole request stream buffered into a list, one response
+				b.writeln('pub fn (mut x ${svc.name}Client) ${method}(reqs []${in_sym.vname}, opts ...grpc.CallOption) !grpc.Reply[${out_sym.vname}] {')
+				b.writeln('\tmut bodies := [][]u8{cap: reqs.len}')
+				b.writeln('\tfor r in reqs {')
+				b.writeln('\t\tbodies << r.encode()')
+				b.writeln('\t}')
+				b.writeln("\traw := x.c.client_stream('${path}', bodies, ...opts)!")
+				b.writeln('\treturn grpc.Reply[${out_sym.vname}]{')
+				b.writeln('\t\tmsg:      ${out_sym.vname}.decode(raw.payload)!')
+				b.writeln('\t\tmetadata: raw.metadata')
+				b.writeln('\t}')
+				b.writeln('}')
+			} else {
+				b.writeln('pub fn (mut x ${svc.name}Client) ${method}(req ${in_sym.vname}, opts ...grpc.CallOption) !grpc.Reply[${out_sym.vname}] {')
+				b.writeln("\traw := x.c.unary('${path}', req.encode(), ...opts)!")
+				b.writeln('\treturn grpc.Reply[${out_sym.vname}]{')
+				b.writeln('\t\tmsg:      ${out_sym.vname}.decode(raw.payload)!')
+				b.writeln('\t\tmetadata: raw.metadata')
+				b.writeln('\t}')
+				b.writeln('}')
+			}
 		}
-		g.emit_connect_service(mut b, svc, prefix)!
+		g.emit_service(mut b, svc, prefix)!
 	}
 	return b.str()
 }
 
-// server side: a handler interface for the user to implement plus a
-// dispatch struct satisfying grpc.Service for ConnectServer.mount
-fn (mut g Gen) emit_connect_service(mut b strings.Builder, svc Service, prefix string) ! {
+// emit_service writes the handler interface plus the two dispatch methods.
+// bidi rpcs are skipped everywhere (no buffered form); call() covers the unary
+// subset for Connect, grpc_call() covers unary + buffered streaming for gRPC.
+fn (mut g Gen) emit_service(mut b strings.Builder, svc Service, prefix string) ! {
+	mut nonbidi := []Method{}
 	mut unary := []Method{}
 	for m in svc.methods {
+		if m.client_streaming && m.server_streaming {
+			continue
+		}
+		nonbidi << m
 		if !m.client_streaming && !m.server_streaming {
 			unary << m
 		}
 	}
-	if unary.len == 0 {
+	if nonbidi.len == 0 {
 		b.writeln('')
-		b.writeln('// service ${svc.name}: no unary methods, server glue skipped')
+		b.writeln('// service ${svc.name}: only bidirectional streaming, server glue skipped')
 		return
 	}
+
 	b.writeln('')
 	b.writeln('pub interface ${svc.name}Handler {')
 	b.writeln('mut:')
-	for m in unary {
+	for m in nonbidi {
 		in_sym := g.resolve_in_pkg([], m.input) or { return error('unreachable') }
 		out_sym := g.resolve_in_pkg([], m.output) or { return error('unreachable') }
-		b.writeln('\t${sanitize(snake(m.name))}(mut ctx grpc.ServerContext, req ${in_sym.vname}) !${out_sym.vname}')
+		method := sanitize(snake(m.name))
+		if m.server_streaming {
+			b.writeln('\t${method}(mut ctx grpc.ServerContext, req ${in_sym.vname}) ![]${out_sym.vname}')
+		} else if m.client_streaming {
+			b.writeln('\t${method}(mut ctx grpc.ServerContext, reqs []${in_sym.vname}) !${out_sym.vname}')
+		} else {
+			b.writeln('\t${method}(mut ctx grpc.ServerContext, req ${in_sym.vname}) !${out_sym.vname}')
+		}
 	}
 	b.writeln('}')
 	b.writeln('')
@@ -120,8 +162,22 @@ fn (mut g Gen) emit_connect_service(mut b strings.Builder, svc Service, prefix s
 	b.writeln('pub mut:')
 	b.writeln('\th ${svc.name}Handler')
 	b.writeln('}')
+
+	g.emit_unary_call(mut b, svc, prefix, unary)!
+	g.emit_grpc_call(mut b, svc, prefix, nonbidi)!
+}
+
+// emit_unary_call writes call(): the Connect dispatch, one message in/out, over
+// the unary rpcs only (streaming paths fall through to found=false, i.e. an
+// unimplemented procedure on the HTTP/1.1 transport that can't stream).
+fn (mut g Gen) emit_unary_call(mut b strings.Builder, svc Service, prefix string, unary []Method) ! {
 	b.writeln('')
 	b.writeln('pub fn (mut s ${svc.name}Service) call(path string, codec grpc.Codec, body []u8, mut ctx grpc.ServerContext) !([]u8, bool) {')
+	if unary.len == 0 {
+		b.writeln('\treturn []u8{}, false')
+		b.writeln('}')
+		return
+	}
 	b.writeln('\tmatch path {')
 	for m in unary {
 		in_sym := g.resolve_in_pkg([], m.input) or { return error('unreachable') }
@@ -158,6 +214,57 @@ fn (mut g Gen) emit_connect_service(mut b strings.Builder, svc Service, prefix s
 	}
 	b.writeln('\t\telse {')
 	b.writeln('\t\t\treturn []u8{}, false')
+	b.writeln('\t\t}')
+	b.writeln('\t}')
+	b.writeln('}')
+}
+
+// emit_grpc_call writes grpc_call(): the native gRPC dispatch, a list of request
+// messages in and a list of response messages out (proto only). Unary and
+// server-streaming take exactly one request; client-streaming takes the whole
+// buffered list; server-streaming returns the whole buffered list.
+fn (mut g Gen) emit_grpc_call(mut b strings.Builder, svc Service, prefix string, nonbidi []Method) ! {
+	b.writeln('')
+	b.writeln('pub fn (mut s ${svc.name}Service) grpc_call(path string, reqs [][]u8, mut ctx grpc.ServerContext) !([][]u8, bool) {')
+	b.writeln('\tmatch path {')
+	for m in nonbidi {
+		in_sym := g.resolve_in_pkg([], m.input) or { return error('unreachable') }
+		method := sanitize(snake(m.name))
+		b.writeln("\t\t'${prefix}${m.name}' {")
+		if m.client_streaming {
+			b.writeln('\t\t\tmut msgs := []${in_sym.vname}{cap: reqs.len}')
+			b.writeln('\t\t\tfor b_ in reqs {')
+			b.writeln('\t\t\t\tmsgs << ${in_sym.vname}.decode(b_)!')
+			b.writeln('\t\t\t}')
+			b.writeln('\t\t\tresp := s.h.${method}(mut ctx, msgs)!')
+			b.writeln('\t\t\treturn [resp.encode()], true')
+		} else {
+			// unary and server-streaming both take exactly one request message
+			b.writeln('\t\t\tif reqs.len != 1 {')
+			b.writeln('\t\t\t\treturn grpc.StatusError{')
+			b.writeln('\t\t\t\t\tstatus: grpc.Status{')
+			b.writeln('\t\t\t\t\t\tcode:    .invalid_argument')
+			b.writeln("\t\t\t\t\t\tmessage: '${m.name} expects exactly one request message'")
+			b.writeln('\t\t\t\t\t}')
+			b.writeln('\t\t\t\t}')
+			b.writeln('\t\t\t}')
+			b.writeln('\t\t\treq := ${in_sym.vname}.decode(reqs[0])!')
+			if m.server_streaming {
+				b.writeln('\t\t\tresps := s.h.${method}(mut ctx, req)!')
+				b.writeln('\t\t\tmut out := [][]u8{cap: resps.len}')
+				b.writeln('\t\t\tfor r in resps {')
+				b.writeln('\t\t\t\tout << r.encode()')
+				b.writeln('\t\t\t}')
+				b.writeln('\t\t\treturn out, true')
+			} else {
+				b.writeln('\t\t\tresp := s.h.${method}(mut ctx, req)!')
+				b.writeln('\t\t\treturn [resp.encode()], true')
+			}
+		}
+		b.writeln('\t\t}')
+	}
+	b.writeln('\t\telse {')
+	b.writeln('\t\t\treturn [][]u8{}, false')
 	b.writeln('\t\t}')
 	b.writeln('\t}')
 	b.writeln('}')

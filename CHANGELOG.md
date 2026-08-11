@@ -12,6 +12,20 @@ mappings, and generated enums/oneof sum types — together with `protobuf.Encode
 `protobuf.json_*` helpers are `pub` only so generated code can call them across
 modules; they are runtime-internal and not covered by the semver contract.
 
+## [1.3.0] - 2026-08-11
+
+### Changed
+- **gRPC stub codegen (`vpbgen -grpc`) now emits buffered streaming.** A
+  server-streaming rpc generates a client method returning `Reply[[]Resp]` and a
+  handler returning `![]Resp`; a client-streaming rpc generates a client method
+  taking `[]Req` and a handler taking `[]Req`. Both express a stream through the
+  one-shot HTTP transport by carrying multiple gRPC frames in one body;
+  bidirectional streaming is still skipped. The generated `<Name>Service` gains a
+  `grpc_call` dispatch (a list of request messages in, a list out) for grpc.v's
+  native `GrpcServer`, alongside the existing unary `call` for `ConnectServer`.
+  The `-grpc` stub shape is outside the frozen message API and moves in minors
+  until grpc.v reaches 1.0.
+
 ## [1.2.1] - 2026-08-10
 
 ### Fixed
