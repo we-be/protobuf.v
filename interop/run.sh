@@ -12,10 +12,15 @@ command -v protoc >/dev/null || { echo "protoc required (brew install protobuf)"
 COUNT="${1:-300}"
 SEED="${2:-42}"
 
-# scalars_pb.v is generated — refuse to run against a stale copy
+# scalars_pb.v is generated — refuse to run against a stale copy. Compared
+# with whitespace stripped, not byte-exact: vpbgen vfmt's its output, so a
+# byte gate holds the committed copy hostage to upstream formatter changes
+# (V's v3 formatter backend, vlang/v#28176, re-flowed match arms and struct
+# field alignment without changing a token). Any real drift — renamed field,
+# changed type, new message — still trips it.
 regen="$(mktemp -d)/scalars_pb.v"
 v run ../cmd/vpbgen -m main -json -o "$regen" scalars.proto >/dev/null
-if ! cmp -s "$regen" scalars_pb.v; then
+if ! diff -q <(tr -d '[:space:]' < "$regen") <(tr -d '[:space:]' < scalars_pb.v) >/dev/null; then
   echo "FAIL: scalars_pb.v is stale — regenerate with:"
   echo "  v run cmd/vpbgen -m main -json -o interop/scalars_pb.v interop/scalars.proto"
   exit 1
