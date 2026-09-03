@@ -77,10 +77,19 @@ jobs:
   # the same box so the V/Go ratio is stable. Baselines differ by
   # hardware: on desktop cores (Zen 2, even pinned to 4 CPUs) V wins
   # every cell, but on these Azure vCPUs allocation-heavy decode trails
-  # Go at ~1.2-1.5 while encode holds ~0.3-0.9 — verified NOT to be a V
-  # toolchain difference. Thresholds sit above the runner baselines with
-  # headroom; the goal is catching relative regressions (the one real one
-  # we have had was +40 percent wall time, far past either gate).
+  # Go. Thresholds sit above the runner baselines with headroom; the goal
+  # is catching relative regressions (the one real one we have had was
+  # +40 percent wall time, far past either gate).
+  #
+  # The decode threshold was 1.9 until 2026-09-03, when vlang/v#28293 made
+  # `int` 64-bit and V's decode got materially slower on the same runners:
+  # 86 B decode went 686 -> 1427 ns/op (ratio 0.91 -> 2.27), 15.5 KB 0.77
+  # -> 1.50, 1.6 MB 0.91 -> 1.28, while encode was flat-to-faster. That is
+  # a toolchain change, not ours — our only decode edit was an i32 cast
+  # measured at no cost, and it is not allocation/GC (a -gc none build is
+  # identical). Re-baselined to 2.8 so the gate still blocks a real +40
+  # percent regression on top of the new normal; tighten it again when
+  # upstream decode recovers.
   perf:
     runs-on: ubuntu-latest
     defaults:
@@ -108,7 +117,7 @@ jobs:
           ln -s "$PWD" ~/.vmodules/protobuf
 
       - name: Benchmark with regression gate
-        run: MAX_ENCODE_RATIO=1.1 MAX_DECODE_RATIO=1.9 ./bench/run.sh /tmp/bench-results.md
+        run: MAX_ENCODE_RATIO=1.1 MAX_DECODE_RATIO=2.8 ./bench/run.sh /tmp/bench-results.md
 
       # to the job summary and the step log, so the runner's V/Go ratios
       # are visible without opening the summary page
