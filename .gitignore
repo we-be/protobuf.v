@@ -9,3 +9,6 @@ addressbook.bin
 bench/v/pbbench*
 bench/go/pbbench*
 bench/bench-results.md
+examples/addressbook/addressbook
+# the v3 compiler leaves a temp dir behind whenever it bails to the stable one
+.*.v3cc.*/
