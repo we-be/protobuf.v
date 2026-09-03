@@ -120,6 +120,34 @@ fn test_negative_int32_sign_extends() ! {
 	assert d.read_int32()! == -1
 }
 
+// `int` is 64-bit on 64-bit targets since vlang/v#28293, so the 32-bit reads
+// have to truncate explicitly — the width of `int` no longer does it for them.
+fn test_32_bit_reads_truncate() ! {
+	// sfixed32 -1 is four 0xff bytes; the sign bit must survive the widening
+	mut e := Encoder{}
+	e.write_sfixed32_field(1, -1)
+	assert e.buf == [u8(0x0d), 0xff, 0xff, 0xff, 0xff]
+	mut d := Decoder{
+		buf: e.buf
+	}
+	_, wt := d.read_tag()!
+	assert wt == .fixed32
+	assert d.read_sfixed32()! == -1
+
+	// an int32 varint that is NOT sign-extended to 64 bits (five bytes, as
+	// some encoders emit) still has to read back as -1
+	mut d2 := Decoder{
+		buf: [u8(0xff), 0xff, 0xff, 0xff, 0x0f]
+	}
+	assert d2.read_int32()! == -1
+
+	// bits above 32 are not part of an int32 and must not survive
+	mut d3 := Decoder{
+		buf: [u8(0xfd), 0xff, 0xff, 0xff, 0x1f]
+	}
+	assert d3.read_int32()! == -3
+}
+
 fn test_sint_fields() ! {
 	mut e := Encoder{}
 	e.write_sint32_field(1, -1)

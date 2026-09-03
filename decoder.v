@@ -127,9 +127,11 @@ pub fn (mut d Decoder) read_string() !string {
 	return d.read_view()!.bytestr()
 }
 
-// int32/int64 arrive sign-extended to 64 bits; truncation restores them.
+// int32/int64 arrive sign-extended to 64 bits; truncation restores them. The
+// i32 cast is what truncates: `int` is 64-bit on 64-bit targets since
+// vlang/v#28293, so casting straight to it would keep the upper bits.
 pub fn (mut d Decoder) read_int32() !int {
-	return int(d.read_varint()!)
+	return int(i32(d.read_varint()!))
 }
 
 pub fn (mut d Decoder) read_int64() !i64 {
@@ -156,7 +158,8 @@ pub fn (mut d Decoder) read_sint64() !i64 {
 }
 
 pub fn (mut d Decoder) read_sfixed32() !int {
-	return int(d.read_fixed32()!)
+	// via i32 so the sign bit survives the widening to a 64-bit `int`
+	return int(i32(d.read_fixed32()!))
 }
 
 pub fn (mut d Decoder) read_sfixed64() !i64 {

@@ -135,7 +135,9 @@ fn test_fuzz_roundtrip_random_messages() ! {
 			p.name = 'n${r.next() % 1000}'
 		}
 		if r.next() % 2 == 0 {
-			p.id = int(r.next())
+			// via i32: id is an int32 field, and `int` stopped truncating to
+			// 32 bits when it went 64-bit (vlang/v#28293)
+			p.id = int(i32(r.next()))
 		}
 		if r.next() % 2 == 0 {
 			p.email = 'e${r.next() % 1000}@x.io'
