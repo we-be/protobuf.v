@@ -29,7 +29,9 @@ fn build_book(n int) AddressBook {
 	mut people := []Person{cap: n}
 	for i in 0 .. n {
 		pad := int(r.next() % 24)
-		id := int(r.next() & 0xffffffff)
+		// i32 to match the Go harness's int32(): `int` is 64-bit since
+		// vlang/v#28293, so it no longer truncates these into negative ids
+		id := int(i32(r.next() & 0xffffffff))
 		active := (r.next() & 1) == 1
 		score := f64(r.next() % 100000) / 100.0
 		last_seen := r.next()
