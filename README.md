@@ -31,6 +31,13 @@ contract covers the generated message surface (`encode`/`decode`/`json`/
 are `pub` only so generated code can reach them across modules — they are
 runtime-internal and may change. See [`CHANGELOG.md`](CHANGELOG.md).
 
+## Requirements
+
+protobuf.v builds on **V master**, pinned to the commit in
+[`.v-version`](.v-version) — what CI installs via `vlang/setup-v`'s
+`version-file`. Stable V 0.5.2 predates the 64-bit `int` change the wire layer
+now accounts for; use the pinned commit.
+
 ## Quickstart
 
 ```sh

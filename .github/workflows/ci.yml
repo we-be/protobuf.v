@@ -12,7 +12,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    # master only. A stable-release leg is worth having, but V 0.5.2 cannot
+    # pinned master only. A stable-release leg is worth having, but V 0.5.2 cannot
     # bootstrap on current runners (duplicate C.open decl in vlib/os), so it
     # is red on every OS regardless of our code — restore it once a release
     # builds again.
@@ -26,10 +26,14 @@ jobs:
         with:
           path: repo
 
+      # pinned to the last V master commit that builds a working compiler:
+      # vlang/v#28378 (2026-09-05) made Linux/macOS `v` a V3 self-build, and
+      # that binary corrupts memory on `import x.json2`. Bump .v-version once
+      # upstream fixes it (tracked in vlang/v#28384).
       - name: Setup V
         uses: vlang/setup-v@v1
         with:
-          check-latest: true
+          version-file: .v-version
 
       # a tarball install has no .git, so this prints a bare version with no
       # commit — check the setup-v step's download URL to identify the build
@@ -100,10 +104,14 @@ jobs:
         with:
           path: repo
 
+      # pinned to the last V master commit that builds a working compiler:
+      # vlang/v#28378 (2026-09-05) made Linux/macOS `v` a V3 self-build, and
+      # that binary corrupts memory on `import x.json2`. Bump .v-version once
+      # upstream fixes it (tracked in vlang/v#28384).
       - name: Setup V
         uses: vlang/setup-v@v1
         with:
-          check-latest: true
+          version-file: .v-version
 
       - name: Setup Go
         uses: actions/setup-go@v5
