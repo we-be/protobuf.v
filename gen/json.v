@@ -71,7 +71,7 @@ fn json_map_key_parse(key_typ string) string {
 
 fn json_scalar_emit(t string, ve string) string {
 	return match t {
-		'int32', 'sint32', 'sfixed32' { 'json2.Any(i64(${ve}))' }
+		'int32', 'sint32', 'sfixed32' { 'json2.Any(i64(i32(${ve})))' }
 		'int64', 'sint64', 'sfixed64' { 'protobuf.json_i64(${ve})' }
 		'uint32', 'fixed32' { 'json2.Any(u64(${ve}))' }
 		'uint64', 'fixed64' { 'protobuf.json_u64(${ve})' }
@@ -128,7 +128,7 @@ fn (mut g Gen) emit_enum_json(mut b strings.Builder, vname string, e Enum) {
 		seen_out[val.number] = true
 		b.writeln("\t\t${val.number} { json2.Any('${val.name}') }")
 	}
-	b.writeln('\t\telse { json2.Any(i64(int(v))) }')
+	b.writeln('\t\telse { json2.Any(i64(i32(int(v)))) }')
 	b.writeln('\t}')
 	b.writeln('}')
 	b.writeln('')

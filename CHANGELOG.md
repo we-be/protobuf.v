@@ -12,6 +12,21 @@ mappings, and generated enums/oneof sum types — together with `protobuf.Encode
 `protobuf.json_*` helpers are `pub` only so generated code can call them across
 modules; they are runtime-internal and not covered by the semver contract.
 
+## [Unreleased]
+
+### Fixed
+- **32-bit scalars keep 32-bit wire semantics under V's 64-bit `int`.**
+  vlang/v#28293 made `int` 64-bit on 64-bit targets, so the type stopped
+  truncating for the proto types mapped onto it. The reads were fixed first
+  (`read_int32`/`read_sfixed32` truncate through `i32`); the writes now do the
+  same. An `int32`/`sint32` field — and an enum, which rides the int32 wire —
+  can hold a value the field cannot represent, and it used to go out as a wide
+  varint that protoc reads back truncated, so V decoded something it had never
+  encoded. Encode, the `encoded_size` mirrors, and protojson output all
+  truncate now, so every value an `int` can hold round-trips against protoc.
+  Generated code calls new runtime-internal helpers `protobuf.int32_wire` /
+  `protobuf.sint32_wire` — regenerate stubs with `vpbgen`.
+
 ## [1.3.0] - 2026-08-11
 
 ### Changed

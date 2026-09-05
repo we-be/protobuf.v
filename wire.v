@@ -30,3 +30,18 @@ pub fn zigzag_encode(n i64) u64 {
 pub fn zigzag_decode(v u64) i64 {
 	return i64(v >> 1) ^ -i64(v & 1)
 }
+
+// proto's signed 32-bit scalars must reach the wire with 32-bit semantics no
+// matter how wide V's `int` is — it went 64-bit on 64-bit targets in
+// vlang/v#28293, so the type stopped truncating on its own. read_int32 and
+// read_sfixed32 already truncate on the way in; these are the mirror on the
+// way out, so an out-of-range value encodes the way protoc reads it back.
+@[inline]
+pub fn int32_wire(v int) u64 {
+	return u64(i64(i32(v)))
+}
+
+@[inline]
+pub fn sint32_wire(v int) u64 {
+	return zigzag_encode(i64(i32(v)))
+}

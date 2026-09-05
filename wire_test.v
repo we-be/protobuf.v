@@ -148,6 +148,31 @@ fn test_32_bit_reads_truncate() ! {
 	assert d3.read_int32()! == -3
 }
 
+// the mirror of test_32_bit_reads_truncate: a 64-bit `int` can now hold a
+// value an int32 field cannot, and the writes must put the int32 on the wire —
+// otherwise protoc reads back something V never round-trips.
+fn test_32_bit_writes_truncate() ! {
+	out_of_range := int(i64(1) << 32 | 7)
+
+	mut wide := Encoder{}
+	wide.write_int32_field(1, out_of_range)
+	mut narrow := Encoder{}
+	narrow.write_int32_field(1, 7)
+	assert wide.buf == narrow.buf
+
+	mut d := Decoder{
+		buf: wide.buf
+	}
+	_, _ := d.read_tag()!
+	assert d.read_int32()! == 7
+
+	mut zwide := Encoder{}
+	zwide.write_sint32_field(1, out_of_range)
+	mut znarrow := Encoder{}
+	znarrow.write_sint32_field(1, 7)
+	assert zwide.buf == znarrow.buf
+}
+
 fn test_sint_fields() ! {
 	mut e := Encoder{}
 	e.write_sint32_field(1, -1)

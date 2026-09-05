@@ -24,7 +24,7 @@ pub fn (m &PhoneNumber) encoded_size() int {
 		n += protobuf.len_field_len(1, m.number.len)
 	}
 	if int(m.type_) != 0 {
-		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(m.type_))))
+		n += protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(int(m.type_)))
 	}
 	return n + m.pb_unknown.len
 }
@@ -106,7 +106,7 @@ pub fn (m &Person) encoded_size() int {
 		n += protobuf.len_field_len(1, m.name.len)
 	}
 	if m.id != 0 {
-		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.id)))
+		n += protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(m.id))
 	}
 	if m.email != '' {
 		n += protobuf.len_field_len(3, m.email.len)
@@ -131,12 +131,10 @@ pub fn (m &Person) encoded_size() int {
 		n += protobuf.len_field_len(8, p)
 	}
 	for k, v in m.metadata {
-		n += protobuf.len_field_len(9, protobuf.len_field_len(1, k.len) +
-			protobuf.len_field_len(2, v.len))
+		n += protobuf.len_field_len(9, protobuf.len_field_len(1, k.len) + protobuf.len_field_len(2, v.len))
 	}
 	for k, v in m.counters {
-		n += protobuf.len_field_len(10, protobuf.tag_len(1) + protobuf.varint_len(u64(i64(k))) +
-			protobuf.tag_len(2) + protobuf.varint_len(u64(v)))
+		n += protobuf.len_field_len(10, protobuf.tag_len(1) + protobuf.varint_len(protobuf.int32_wire(k)) + protobuf.tag_len(2) + protobuf.varint_len(u64(v)))
 	}
 	if seen_at := m.seen_at {
 		n += protobuf.len_field_len(11, seen_at.encoded_size())
@@ -206,8 +204,7 @@ pub fn (m &Person) encode_to(mut e protobuf.Encoder) {
 		for k in counters_keys {
 			v := m.counters[k]
 			e.write_tag(10, .len_delim)
-			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(u64(i64(k))) +
-				protobuf.tag_len(2) + protobuf.varint_len(u64(v))))
+			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(protobuf.int32_wire(k)) + protobuf.tag_len(2) + protobuf.varint_len(u64(v))))
 			e.write_int32_field(1, k)
 			e.write_int64_field(2, v)
 		}
@@ -289,8 +286,12 @@ pub fn Person.decode(buf []u8) !Person {
 				for sub.more() {
 					mf, mw := sub.read_tag()!
 					match mf {
-						1 { mk = sub.read_string()! }
-						2 { mv = sub.read_string()! }
+						1 {
+							mk = sub.read_string()!
+						}
+						2 {
+							mv = sub.read_string()!
+						}
 						else { sub.skip(mw)! }
 					}
 				}
@@ -305,15 +306,25 @@ pub fn Person.decode(buf []u8) !Person {
 				for sub.more() {
 					mf, mw := sub.read_tag()!
 					match mf {
-						1 { mk = sub.read_int32()! }
-						2 { mv = sub.read_int64()! }
+						1 {
+							mk = sub.read_int32()!
+						}
+						2 {
+							mv = sub.read_int64()!
+						}
 						else { sub.skip(mw)! }
 					}
 				}
 				m.counters[mk] = mv
 			}
 			11 {
-				m.seen_at = GoogleProtobuf_Timestamp.decode(d.read_view()!)!
+				mv_seen_at := d.read_view()!
+				mut mb_seen_at := []u8{}
+				if old := m.seen_at {
+					mb_seen_at = old.encode()
+				}
+				mb_seen_at << mv_seen_at
+				m.seen_at = GoogleProtobuf_Timestamp.decode(mb_seen_at)!
 			}
 			12 {
 				m.contact = Person_Handle{
@@ -399,7 +410,7 @@ pub fn (m &GoogleProtobuf_Timestamp) encoded_size() int {
 		n += protobuf.tag_len(1) + protobuf.varint_len(u64(m.seconds))
 	}
 	if m.nanos != 0 {
-		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.nanos)))
+		n += protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(m.nanos))
 	}
 	return n + m.pb_unknown.len
 }
@@ -460,6 +471,6 @@ pub fn (m &GoogleProtobuf_Timestamp) as_time() time.Time {
 pub fn GoogleProtobuf_Timestamp.from_time(t time.Time) GoogleProtobuf_Timestamp {
 	return GoogleProtobuf_Timestamp{
 		seconds: t.unix()
-		nanos:   t.nanosecond
+		nanos: t.nanosecond
 	}
 }

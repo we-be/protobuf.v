@@ -60,7 +60,7 @@ pub fn (mut e Encoder) write_f64(v f64) {
 // int32/int64/enum negatives sign-extend to 64 bits: always 10 bytes on the wire.
 pub fn (mut e Encoder) write_int32_field(field u32, v int) {
 	e.write_tag(field, .varint)
-	e.write_varint(u64(i64(v)))
+	e.write_varint(int32_wire(v))
 }
 
 pub fn (mut e Encoder) write_int64_field(field u32, v i64) {
@@ -80,7 +80,7 @@ pub fn (mut e Encoder) write_uint64_field(field u32, v u64) {
 
 pub fn (mut e Encoder) write_sint32_field(field u32, v int) {
 	e.write_tag(field, .varint)
-	e.write_varint(zigzag_encode(i64(v)))
+	e.write_varint(sint32_wire(v))
 }
 
 pub fn (mut e Encoder) write_sint64_field(field u32, v i64) {

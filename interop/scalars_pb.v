@@ -18,18 +18,28 @@ fn color_to_json(v Color) json2.Any {
 		1 { json2.Any('RED') }
 		2 { json2.Any('GREEN') }
 		3 { json2.Any('BLUE') }
-		else { json2.Any(i64(int(v))) }
+		else { json2.Any(i64(i32(int(v)))) }
 	}
 }
 
 fn color_from_json(a json2.Any) !Color {
 	if a is string {
 		match a {
-			'COLOR_UNSPECIFIED' { return unsafe { Color(0) } }
-			'RED' { return unsafe { Color(1) } }
-			'GREEN' { return unsafe { Color(2) } }
-			'BLUE' { return unsafe { Color(3) } }
-			else { return error('protojson: unknown value `${a}` for Color') }
+			'COLOR_UNSPECIFIED' {
+				return unsafe { Color(0) }
+			}
+			'RED' {
+				return unsafe { Color(1) }
+			}
+			'GREEN' {
+				return unsafe { Color(2) }
+			}
+			'BLUE' {
+				return unsafe { Color(3) }
+			}
+			else {
+				return error('protojson: unknown value `${a}` for Color')
+			}
 		}
 	}
 	return unsafe { Color(int(protobuf.json_intv(a)!)) }
@@ -48,7 +58,7 @@ pub fn (m &Nested) encoded_size() int {
 		n += protobuf.len_field_len(1, m.name.len)
 	}
 	if m.num != 0 {
-		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.num)))
+		n += protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(m.num))
 	}
 	return n + m.pb_unknown.len
 }
@@ -98,7 +108,7 @@ pub fn Nested.decode(buf []u8) !Nested {
 pub fn (m &Nested) to_any() GoogleProtobuf_Any {
 	return GoogleProtobuf_Any{
 		type_url: 'type.googleapis.com/Nested'
-		value:    m.encode()
+		value: m.encode()
 	}
 }
 
@@ -124,7 +134,7 @@ pub fn (m &Nested) json_value() !json2.Any {
 		o['name'] = json2.Any(m.name)
 	}
 	if m.num != 0 {
-		o['num'] = json2.Any(i64(m.num))
+		o['num'] = json2.Any(i64(i32(m.num)))
 	}
 	return json2.Any(o)
 }
@@ -204,7 +214,7 @@ pub mut:
 pub fn (m &Scalars) encoded_size() int {
 	mut n := 0
 	if m.a != 0 {
-		n += protobuf.tag_len(1) + protobuf.varint_len(u64(i64(m.a)))
+		n += protobuf.tag_len(1) + protobuf.varint_len(protobuf.int32_wire(m.a))
 	}
 	if m.b != 0 {
 		n += protobuf.tag_len(2) + protobuf.varint_len(u64(m.b))
@@ -216,7 +226,7 @@ pub fn (m &Scalars) encoded_size() int {
 		n += protobuf.tag_len(4) + protobuf.varint_len(m.d)
 	}
 	if m.e != 0 {
-		n += protobuf.tag_len(5) + protobuf.varint_len(protobuf.zigzag_encode(i64(m.e)))
+		n += protobuf.tag_len(5) + protobuf.varint_len(protobuf.sint32_wire(m.e))
 	}
 	if m.f != 0 {
 		n += protobuf.tag_len(6) + protobuf.varint_len(protobuf.zigzag_encode(m.f))
@@ -249,12 +259,12 @@ pub fn (m &Scalars) encoded_size() int {
 		n += protobuf.tag_len(15) + 8
 	}
 	if int(m.p) != 0 {
-		n += protobuf.tag_len(16) + protobuf.varint_len(u64(i64(int(m.p))))
+		n += protobuf.tag_len(16) + protobuf.varint_len(protobuf.int32_wire(int(m.p)))
 	}
 	if m.rp.len > 0 {
 		mut p := 0
 		for v in m.rp {
-			p += protobuf.varint_len(u64(i64(v)))
+			p += protobuf.varint_len(protobuf.int32_wire(v))
 		}
 		n += protobuf.len_field_len(17, p)
 	}
@@ -268,28 +278,23 @@ pub fn (m &Scalars) encoded_size() int {
 		n += protobuf.len_field_len(20, v.encoded_size())
 	}
 	for k, v in m.mi {
-		n += protobuf.len_field_len(21, protobuf.tag_len(1) + protobuf.varint_len(u64(i64(k))) +
-			protobuf.tag_len(2) + protobuf.varint_len(u64(i64(v))))
+		n += protobuf.len_field_len(21, protobuf.tag_len(1) + protobuf.varint_len(protobuf.int32_wire(k)) + protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(v)))
 	}
 	for k, v in m.ms {
-		n += protobuf.len_field_len(22, protobuf.len_field_len(1, k.len) +
-			protobuf.len_field_len(2, v.len))
+		n += protobuf.len_field_len(22, protobuf.len_field_len(1, k.len) + protobuf.len_field_len(2, v.len))
 	}
 	for k, v in m.mn {
-		n += protobuf.len_field_len(23, protobuf.len_field_len(1, k.len) +
-			protobuf.len_field_len(2, v.encoded_size()))
+		n += protobuf.len_field_len(23, protobuf.len_field_len(1, k.len) + protobuf.len_field_len(2, v.encoded_size()))
 	}
 	for k, v in m.mc {
-		n += protobuf.len_field_len(24, protobuf.tag_len(1) + protobuf.varint_len(u64(k)) +
-			protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(v)))))
+		n += protobuf.len_field_len(24, protobuf.tag_len(1) + protobuf.varint_len(u64(k)) + protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(int(v))))
 	}
 	for k, _ in m.mb {
-		n += protobuf.len_field_len(25, protobuf.tag_len(1) +
-			protobuf.varint_len(protobuf.zigzag_encode(k)) + protobuf.tag_len(2) + 1)
+		n += protobuf.len_field_len(25, protobuf.tag_len(1) + protobuf.varint_len(protobuf.zigzag_encode(k)) + protobuf.tag_len(2) + 1)
 	}
 	if ov := m.choice {
 		if ov is Scalars_Ci {
-			n += protobuf.tag_len(26) + protobuf.varint_len(u64(i64(ov.value)))
+			n += protobuf.tag_len(26) + protobuf.varint_len(protobuf.int32_wire(ov.value))
 		}
 	}
 	if ov := m.choice {
@@ -366,12 +371,12 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 	if m.rp.len > 0 {
 		mut p := 0
 		for v in m.rp {
-			p += protobuf.varint_len(u64(i64(v)))
+			p += protobuf.varint_len(protobuf.int32_wire(v))
 		}
 		e.write_tag(17, .len_delim)
 		e.write_varint(u64(p))
 		for v in m.rp {
-			e.write_varint(u64(i64(v)))
+			e.write_varint(protobuf.int32_wire(v))
 		}
 	}
 	for v in m.rs {
@@ -393,8 +398,7 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 		for k in mi_keys {
 			v := m.mi[k]
 			e.write_tag(21, .len_delim)
-			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(u64(i64(k))) +
-				protobuf.tag_len(2) + protobuf.varint_len(u64(i64(v)))))
+			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(protobuf.int32_wire(k)) + protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(v))))
 			e.write_int32_field(1, k)
 			e.write_int32_field(2, v)
 		}
@@ -416,8 +420,7 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 		for k in mn_keys {
 			v := m.mn[k]
 			e.write_tag(23, .len_delim)
-			e.write_varint(u64(protobuf.len_field_len(1, k.len) +
-				protobuf.len_field_len(2, v.encoded_size())))
+			e.write_varint(u64(protobuf.len_field_len(1, k.len) + protobuf.len_field_len(2, v.encoded_size())))
 			e.write_string_field(1, k)
 			e.write_tag(2, .len_delim)
 			e.write_varint(u64(v.encoded_size()))
@@ -430,8 +433,7 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 		for k in mc_keys {
 			v := m.mc[k]
 			e.write_tag(24, .len_delim)
-			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(u64(k)) +
-				protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(v))))))
+			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(u64(k)) + protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(int(v)))))
 			e.write_uint32_field(1, k)
 			e.write_int32_field(2, int(v))
 		}
@@ -442,8 +444,7 @@ pub fn (m &Scalars) encode_to(mut e protobuf.Encoder) {
 		for k in mb_keys {
 			v := m.mb[k]
 			e.write_tag(25, .len_delim)
-			e.write_varint(u64(protobuf.tag_len(1) +
-				protobuf.varint_len(protobuf.zigzag_encode(k)) + protobuf.tag_len(2) + 1))
+			e.write_varint(u64(protobuf.tag_len(1) + protobuf.varint_len(protobuf.zigzag_encode(k)) + protobuf.tag_len(2) + 1))
 			e.write_sint64_field(1, k)
 			e.write_bool_field(2, v)
 		}
@@ -582,8 +583,12 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 				for sub.more() {
 					mf, mw := sub.read_tag()!
 					match mf {
-						1 { mk = sub.read_int32()! }
-						2 { mv = sub.read_int32()! }
+						1 {
+							mk = sub.read_int32()!
+						}
+						2 {
+							mv = sub.read_int32()!
+						}
 						else { sub.skip(mw)! }
 					}
 				}
@@ -598,8 +603,12 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 				for sub.more() {
 					mf, mw := sub.read_tag()!
 					match mf {
-						1 { mk = sub.read_string()! }
-						2 { mv = sub.read_string()! }
+						1 {
+							mk = sub.read_string()!
+						}
+						2 {
+							mv = sub.read_string()!
+						}
 						else { sub.skip(mw)! }
 					}
 				}
@@ -614,8 +623,12 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 				for sub.more() {
 					mf, mw := sub.read_tag()!
 					match mf {
-						1 { mk = sub.read_string()! }
-						2 { mv = Nested.decode(sub.read_view()!)! }
+						1 {
+							mk = sub.read_string()!
+						}
+						2 {
+							mv = Nested.decode(sub.read_view()!)!
+						}
 						else { sub.skip(mw)! }
 					}
 				}
@@ -630,8 +643,12 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 				for sub.more() {
 					mf, mw := sub.read_tag()!
 					match mf {
-						1 { mk = sub.read_uint32()! }
-						2 { mv = unsafe { Color(sub.read_int32()!) } }
+						1 {
+							mk = sub.read_uint32()!
+						}
+						2 {
+							mv = unsafe { Color(sub.read_int32()!) }
+						}
 						else { sub.skip(mw)! }
 					}
 				}
@@ -646,8 +663,12 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 				for sub.more() {
 					mf, mw := sub.read_tag()!
 					match mf {
-						1 { mk = sub.read_sint64()! }
-						2 { mv = sub.read_bool()! }
+						1 {
+							mk = sub.read_sint64()!
+						}
+						2 {
+							mv = sub.read_bool()!
+						}
 						else { sub.skip(mw)! }
 					}
 				}
@@ -709,7 +730,7 @@ pub fn Scalars.decode(buf []u8) !Scalars {
 pub fn (m &Scalars) to_any() GoogleProtobuf_Any {
 	return GoogleProtobuf_Any{
 		type_url: 'type.googleapis.com/Scalars'
-		value:    m.encode()
+		value: m.encode()
 	}
 }
 
@@ -732,7 +753,7 @@ pub fn Scalars.from_json(s string) !Scalars {
 pub fn (m &Scalars) json_value() !json2.Any {
 	mut o := map[string]json2.Any{}
 	if m.a != 0 {
-		o['a'] = json2.Any(i64(m.a))
+		o['a'] = json2.Any(i64(i32(m.a)))
 	}
 	if m.b != 0 {
 		o['b'] = protobuf.json_i64(m.b)
@@ -744,7 +765,7 @@ pub fn (m &Scalars) json_value() !json2.Any {
 		o['d'] = protobuf.json_u64(m.d)
 	}
 	if m.e != 0 {
-		o['e'] = json2.Any(i64(m.e))
+		o['e'] = json2.Any(i64(i32(m.e)))
 	}
 	if m.f != 0 {
 		o['f'] = protobuf.json_i64(m.f)
@@ -771,7 +792,7 @@ pub fn (m &Scalars) json_value() !json2.Any {
 		o['m'] = protobuf.json_u64(m.m)
 	}
 	if m.n != 0 {
-		o['n'] = json2.Any(i64(m.n))
+		o['n'] = json2.Any(i64(i32(m.n)))
 	}
 	if m.o != 0 {
 		o['o'] = protobuf.json_i64(m.o)
@@ -782,7 +803,7 @@ pub fn (m &Scalars) json_value() !json2.Any {
 	if m.rp.len > 0 {
 		mut rp_a := []json2.Any{cap: m.rp.len}
 		for v in m.rp {
-			rp_a << json2.Any(i64(v))
+			rp_a << json2.Any(i64(i32(v)))
 		}
 		o['rp'] = json2.Any(rp_a)
 	}
@@ -809,7 +830,7 @@ pub fn (m &Scalars) json_value() !json2.Any {
 		mi_ks.sort()
 		for k in mi_ks {
 			v := m.mi[k]
-			mi_o[k.str()] = json2.Any(i64(v))
+			mi_o[k.str()] = json2.Any(i64(i32(v)))
 		}
 		o['mi'] = json2.Any(mi_o)
 	}
@@ -855,7 +876,7 @@ pub fn (m &Scalars) json_value() !json2.Any {
 	}
 	if ov := m.choice {
 		if ov is Scalars_Ci {
-			o['ci'] = json2.Any(i64(ov.value))
+			o['ci'] = json2.Any(i64(i32(ov.value)))
 		}
 	}
 	if ov := m.choice {
@@ -1090,7 +1111,7 @@ pub fn (m &GoogleProtobuf_Timestamp) encoded_size() int {
 		n += protobuf.tag_len(1) + protobuf.varint_len(u64(m.seconds))
 	}
 	if m.nanos != 0 {
-		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.nanos)))
+		n += protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(m.nanos))
 	}
 	return n + m.pb_unknown.len
 }
@@ -1151,14 +1172,14 @@ pub fn (m &GoogleProtobuf_Timestamp) as_time() time.Time {
 pub fn GoogleProtobuf_Timestamp.from_time(t time.Time) GoogleProtobuf_Timestamp {
 	return GoogleProtobuf_Timestamp{
 		seconds: t.unix()
-		nanos:   t.nanosecond
+		nanos: t.nanosecond
 	}
 }
 
 pub fn (m &GoogleProtobuf_Timestamp) to_any() GoogleProtobuf_Any {
 	return GoogleProtobuf_Any{
 		type_url: 'type.googleapis.com/google.protobuf.Timestamp'
-		value:    m.encode()
+		value: m.encode()
 	}
 }
 
@@ -1203,7 +1224,7 @@ pub fn GoogleProtobuf_Timestamp.from_json_value(a json2.Any) !GoogleProtobuf_Tim
 	secs, nanos := protobuf.parse_timestamp_rfc3339(s)!
 	return GoogleProtobuf_Timestamp{
 		seconds: secs
-		nanos:   nanos
+		nanos: nanos
 	}
 }
 
@@ -1275,7 +1296,7 @@ pub fn (m &GoogleProtobuf_Any) type_name() string {
 pub fn (m &GoogleProtobuf_Any) to_any() GoogleProtobuf_Any {
 	return GoogleProtobuf_Any{
 		type_url: 'type.googleapis.com/google.protobuf.Any'
-		value:    m.encode()
+		value: m.encode()
 	}
 }
 
@@ -1335,7 +1356,7 @@ pub fn GoogleProtobuf_Any.from_json_value(a json2.Any) !GoogleProtobuf_Any {
 	value := pb_any_from_json(name, obj)!
 	return GoogleProtobuf_Any{
 		type_url: type_url
-		value:    value
+		value: value
 	}
 }
 
@@ -1372,15 +1393,11 @@ fn pb_any_from_json(pb_name string, pb_obj map[string]json2.Any) ![]u8 {
 			return Scalars.from_json_value(json2.Any(pb_inner))!.encode()
 		}
 		'google.protobuf.Timestamp' {
-			pb_v := pb_obj['value'] or {
-				return error('protojson: Any of google.protobuf.Timestamp missing "value"')
-			}
+			pb_v := pb_obj['value'] or { return error('protojson: Any of google.protobuf.Timestamp missing "value"') }
 			return GoogleProtobuf_Timestamp.from_json_value(pb_v)!.encode()
 		}
 		'google.protobuf.Any' {
-			pb_v := pb_obj['value'] or {
-				return error('protojson: Any of google.protobuf.Any missing "value"')
-			}
+			pb_v := pb_obj['value'] or { return error('protojson: Any of google.protobuf.Any missing "value"') }
 			return GoogleProtobuf_Any.from_json_value(pb_v)!.encode()
 		}
 		else {

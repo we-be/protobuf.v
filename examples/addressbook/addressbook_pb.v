@@ -12,10 +12,11 @@ pub enum Person_PhoneType {
 
 pub struct Person {
 pub mut:
-	name   string
-	id     int
-	email  string
-	phones []Person_PhoneNumber
+	name       string
+	id         int
+	email      string
+	phones     []Person_PhoneNumber
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &Person) encoded_size() int {
@@ -24,7 +25,7 @@ pub fn (m &Person) encoded_size() int {
 		n += protobuf.len_field_len(1, m.name.len)
 	}
 	if m.id != 0 {
-		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(m.id)))
+		n += protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(m.id))
 	}
 	if m.email != '' {
 		n += protobuf.len_field_len(3, m.email.len)
@@ -32,7 +33,7 @@ pub fn (m &Person) encoded_size() int {
 	for v in m.phones {
 		n += protobuf.len_field_len(4, v.encoded_size())
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &Person) encode_to(mut e protobuf.Encoder) {
@@ -50,6 +51,7 @@ pub fn (m &Person) encode_to(mut e protobuf.Encoder) {
 		e.write_varint(u64(v.encoded_size()))
 		v.encode_to(mut e)
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &Person) encode() []u8 {
@@ -66,6 +68,7 @@ pub fn Person.decode(buf []u8) !Person {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
@@ -78,10 +81,11 @@ pub fn Person.decode(buf []u8) !Person {
 				m.email = d.read_string()!
 			}
 			4 {
-				m.phones << Person_PhoneNumber.decode(d.read_bytes()!)!
+				m.phones << Person_PhoneNumber.decode(d.read_view()!)!
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}
@@ -90,8 +94,9 @@ pub fn Person.decode(buf []u8) !Person {
 
 pub struct Person_PhoneNumber {
 pub mut:
-	number string
-	type_  Person_PhoneType
+	number     string
+	type_      Person_PhoneType
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &Person_PhoneNumber) encoded_size() int {
@@ -100,9 +105,9 @@ pub fn (m &Person_PhoneNumber) encoded_size() int {
 		n += protobuf.len_field_len(1, m.number.len)
 	}
 	if int(m.type_) != 0 {
-		n += protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(m.type_))))
+		n += protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(int(m.type_)))
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &Person_PhoneNumber) encode_to(mut e protobuf.Encoder) {
@@ -112,6 +117,7 @@ pub fn (m &Person_PhoneNumber) encode_to(mut e protobuf.Encoder) {
 	if int(m.type_) != 0 {
 		e.write_int32_field(2, int(m.type_))
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &Person_PhoneNumber) encode() []u8 {
@@ -128,6 +134,7 @@ pub fn Person_PhoneNumber.decode(buf []u8) !Person_PhoneNumber {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
@@ -138,6 +145,7 @@ pub fn Person_PhoneNumber.decode(buf []u8) !Person_PhoneNumber {
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}
@@ -146,7 +154,8 @@ pub fn Person_PhoneNumber.decode(buf []u8) !Person_PhoneNumber {
 
 pub struct AddressBook {
 pub mut:
-	people []Person
+	people     []Person
+	pb_unknown []u8 // unrecognized fields, re-emitted on encode
 }
 
 pub fn (m &AddressBook) encoded_size() int {
@@ -154,7 +163,7 @@ pub fn (m &AddressBook) encoded_size() int {
 	for v in m.people {
 		n += protobuf.len_field_len(1, v.encoded_size())
 	}
-	return n
+	return n + m.pb_unknown.len
 }
 
 pub fn (m &AddressBook) encode_to(mut e protobuf.Encoder) {
@@ -163,6 +172,7 @@ pub fn (m &AddressBook) encode_to(mut e protobuf.Encoder) {
 		e.write_varint(u64(v.encoded_size()))
 		v.encode_to(mut e)
 	}
+	e.write_raw(m.pb_unknown)
 }
 
 pub fn (m &AddressBook) encode() []u8 {
@@ -179,13 +189,15 @@ pub fn AddressBook.decode(buf []u8) !AddressBook {
 		buf: buf
 	}
 	for d.more() {
+		tag_start := d.pos
 		field, wt := d.read_tag()!
 		match field {
 			1 {
-				m.people << Person.decode(d.read_bytes()!)!
+				m.people << Person.decode(d.read_view()!)!
 			}
 			else {
 				d.skip(wt)!
+				m.pb_unknown << d.buf[tag_start..d.pos]
 			}
 		}
 	}

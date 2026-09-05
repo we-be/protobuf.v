@@ -151,11 +151,11 @@ fn scalar_reader(t string) string {
 
 fn packed_write_stmt(t string, v string) string {
 	return match t {
-		'int32' { 'e.write_varint(u64(i64(${v})))' }
+		'int32' { 'e.write_varint(protobuf.int32_wire(${v}))' }
 		'int64' { 'e.write_varint(u64(${v}))' }
 		'uint32' { 'e.write_varint(u64(${v}))' }
 		'uint64' { 'e.write_varint(${v})' }
-		'sint32' { 'e.write_varint(protobuf.zigzag_encode(i64(${v})))' }
+		'sint32' { 'e.write_varint(protobuf.sint32_wire(${v}))' }
 		'sint64' { 'e.write_varint(protobuf.zigzag_encode(${v}))' }
 		'bool' { 'e.write_varint(if ${v} { u64(1) } else { u64(0) })' }
 		'fixed32' { 'e.write_fixed32(${v})' }
@@ -171,11 +171,11 @@ fn packed_write_stmt(t string, v string) string {
 // exact wire size of one tagged scalar field, mirroring the tagged writers
 fn scalar_size_expr(t string, fnum int, v string) string {
 	return match t {
-		'int32' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(u64(i64(${v})))' }
+		'int32' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(protobuf.int32_wire(${v}))' }
 		'int64' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(u64(${v}))' }
 		'uint32' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(u64(${v}))' }
 		'uint64' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(${v})' }
-		'sint32' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(protobuf.zigzag_encode(i64(${v})))' }
+		'sint32' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(protobuf.sint32_wire(${v}))' }
 		'sint64' { 'protobuf.tag_len(${fnum}) + protobuf.varint_len(protobuf.zigzag_encode(${v}))' }
 		'bool' { 'protobuf.tag_len(${fnum}) + 1' }
 		'string' { 'protobuf.len_field_len(${fnum}, ${v}.len)' }
@@ -190,11 +190,11 @@ fn scalar_size_expr(t string, fnum int, v string) string {
 // types are handled arithmetically via packed_elem_width
 fn packed_elem_size_expr(t string, v string) string {
 	return match t {
-		'int32' { 'protobuf.varint_len(u64(i64(${v})))' }
+		'int32' { 'protobuf.varint_len(protobuf.int32_wire(${v}))' }
 		'int64' { 'protobuf.varint_len(u64(${v}))' }
 		'uint32' { 'protobuf.varint_len(u64(${v}))' }
 		'uint64' { 'protobuf.varint_len(${v})' }
-		'sint32' { 'protobuf.varint_len(protobuf.zigzag_encode(i64(${v})))' }
+		'sint32' { 'protobuf.varint_len(protobuf.sint32_wire(${v}))' }
 		'sint64' { 'protobuf.varint_len(protobuf.zigzag_encode(${v}))' }
 		else { '' }
 	}
@@ -261,7 +261,7 @@ fn map_entry_size_expr(fld Field, info FieldInfo) string {
 	key := scalar_size_expr(fld.key_typ, 1, 'k')
 	val := match info.kind {
 		.scalar { scalar_size_expr(fld.typ, 2, 'v') }
-		.enum_ { 'protobuf.tag_len(2) + protobuf.varint_len(u64(i64(int(v))))' }
+		.enum_ { 'protobuf.tag_len(2) + protobuf.varint_len(protobuf.int32_wire(int(v)))' }
 		.message { 'protobuf.len_field_len(2, v.encoded_size())' }
 	}
 	return '${key} + ${val}'
@@ -943,12 +943,12 @@ fn (mut g Gen) emit_encode_field(mut b strings.Builder, scope []string, vname st
 				b.writeln('\tif m.${name}.len > 0 {')
 				b.writeln('\t\tmut p := 0')
 				b.writeln('\t\tfor v in m.${name} {')
-				b.writeln('\t\t\tp += protobuf.varint_len(u64(i64(int(v))))')
+				b.writeln('\t\t\tp += protobuf.varint_len(protobuf.int32_wire(int(v)))')
 				b.writeln('\t\t}')
 				b.writeln('\t\te.write_tag(${n}, .len_delim)')
 				b.writeln('\t\te.write_varint(u64(p))')
 				b.writeln('\t\tfor v in m.${name} {')
-				b.writeln('\t\t\te.write_varint(u64(i64(int(v))))')
+				b.writeln('\t\t\te.write_varint(protobuf.int32_wire(int(v)))')
 				b.writeln('\t\t}')
 				b.writeln('\t}')
 			} else {
@@ -1027,7 +1027,7 @@ fn (mut g Gen) emit_size_field(mut b strings.Builder, scope []string, vname stri
 	if fld.oneof != '' {
 		arm_size := match info.kind {
 			.scalar { scalar_size_expr(fld.typ, n, 'ov.value') }
-			.enum_ { 'protobuf.tag_len(${n}) + protobuf.varint_len(u64(i64(int(ov.value))))' }
+			.enum_ { 'protobuf.tag_len(${n}) + protobuf.varint_len(protobuf.int32_wire(int(ov.value)))' }
 			.message { 'protobuf.len_field_len(${n}, ov.value.encoded_size())' }
 		}
 		b.writeln('\tif ov := m.${sanitize(fld.oneof)} {')
@@ -1058,13 +1058,13 @@ fn (mut g Gen) emit_size_field(mut b strings.Builder, scope []string, vname stri
 				b.writeln('\tif m.${name}.len > 0 {')
 				b.writeln('\t\tmut p := 0')
 				b.writeln('\t\tfor v in m.${name} {')
-				b.writeln('\t\t\tp += protobuf.varint_len(u64(i64(int(v))))')
+				b.writeln('\t\t\tp += protobuf.varint_len(protobuf.int32_wire(int(v)))')
 				b.writeln('\t\t}')
 				b.writeln('\t\tn += protobuf.len_field_len(${n}, p)')
 				b.writeln('\t}')
 			} else {
 				b.writeln('\tfor v in m.${name} {')
-				b.writeln('\t\tn += protobuf.tag_len(${n}) + protobuf.varint_len(u64(i64(int(v))))')
+				b.writeln('\t\tn += protobuf.tag_len(${n}) + protobuf.varint_len(protobuf.int32_wire(int(v)))')
 				b.writeln('\t}')
 			}
 			return
@@ -1103,11 +1103,11 @@ fn (mut g Gen) emit_size_field(mut b strings.Builder, scope []string, vname stri
 		.enum_ {
 			if fld.label == .optional {
 				b.writeln('\tif ${name} := m.${name} {')
-				b.writeln('\t\tn += protobuf.tag_len(${n}) + protobuf.varint_len(u64(i64(int(${name}))))')
+				b.writeln('\t\tn += protobuf.tag_len(${n}) + protobuf.varint_len(protobuf.int32_wire(int(${name})))')
 				b.writeln('\t}')
 			} else {
 				b.writeln('\tif int(m.${name}) != 0 {')
-				b.writeln('\t\tn += protobuf.tag_len(${n}) + protobuf.varint_len(u64(i64(int(m.${name}))))')
+				b.writeln('\t\tn += protobuf.tag_len(${n}) + protobuf.varint_len(protobuf.int32_wire(int(m.${name})))')
 				b.writeln('\t}')
 			}
 		}
