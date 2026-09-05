@@ -33,7 +33,7 @@ jobs:
       - name: Setup V
         uses: vlang/setup-v@v1
         with:
-          version-file: .v-version
+          version-file: repo/.v-version
 
       # a tarball install has no .git, so this prints a bare version with no
       # commit — check the setup-v step's download URL to identify the build
@@ -111,7 +111,7 @@ jobs:
       - name: Setup V
         uses: vlang/setup-v@v1
         with:
-          version-file: .v-version
+          version-file: repo/.v-version
 
       - name: Setup Go
         uses: actions/setup-go@v5
