@@ -58,12 +58,23 @@ fn main() {
 			}
 			mut i := 2
 			for i < args.len {
+				val := flag_val(args, i)
 				match args[i] {
-					'--id' { p.id = flag_val(args, i).int() }
-					'--email' { p.email = flag_val(args, i) }
-					'--mobile' { p.phones << Person_PhoneNumber{flag_val(args, i), .phone_type_mobile} }
-					'--home' { p.phones << Person_PhoneNumber{flag_val(args, i), .phone_type_home} }
-					'--work' { p.phones << Person_PhoneNumber{flag_val(args, i), .phone_type_work} }
+					'--id' {
+						p.id = val.int()
+					}
+					'--email' {
+						p.email = val
+					}
+					'--mobile' {
+						p.phones << Person_PhoneNumber{ number: val, type_: .phone_type_mobile }
+					}
+					'--home' {
+						p.phones << Person_PhoneNumber{ number: val, type_: .phone_type_home }
+					}
+					'--work' {
+						p.phones << Person_PhoneNumber{ number: val, type_: .phone_type_work }
+					}
 					else { usage() }
 				}
 				i += 2
