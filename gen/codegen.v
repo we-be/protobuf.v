@@ -25,8 +25,10 @@ import strings
 //   (raw wire bytes, arrival order) re-emitted after known fields, so a
 //   decode/encode roundtrip through an older schema loses nothing. Note
 //   V's == therefore treats unknowns as part of the value
-// - recursion through singular message fields is boxed as ?&T (V can't store
-//   a recursive value inline); those messages get a value-equality == operator
+// - recursion through singular message fields is boxed as ?&T, and through
+//   a oneof arm as the arm's `value &T` (V stores options and sum types
+//   inline, so a cycle needs a pointer); those messages get a value-equality
+//   == operator
 
 pub struct GenOpts {
 pub:
@@ -532,9 +534,10 @@ fn (g &Gen) field_info(scope []string, msg_name string, fld Field) !FieldInfo {
 
 // A cycle through singular message fields would make the V struct infinitely
 // sized (?T stores inline), so we DFS the type graph and mark the back-edge
-// field that closes each cycle for ?&T boxing (an optional heap pointer, the
-// only recursive struct shape V allows). repeated/map/oneof fields are already
-// heap-backed and break cycles on their own, so they are never boxed.
+// field that closes each cycle for boxing: ?&T for a singular field, &T for a
+// oneof arm's value (V lays sum types out inline since vlang/v#29578, so an
+// arm no longer breaks a cycle by itself). repeated/map fields are heap-backed
+// and break cycles on their own, so they are never boxed.
 fn (mut g Gen) check_recursion() ! {
 	mut state := map[string]int{} // 0 unvisited, 1 in-progress, 2 done
 	for f in g.files {
@@ -559,7 +562,7 @@ fn (mut g Gen) dfs(pkg []string, path []string, m Message, mut state map[string]
 	mut rscope := pkg.clone()
 	rscope << scope
 	for fld in m.fields {
-		if fld.label == .repeated || fld.is_map || fld.oneof != '' {
+		if fld.label == .repeated || fld.is_map {
 			continue
 		}
 		if v_scalar_type(fld.typ) != '' {
@@ -586,7 +589,7 @@ fn (mut g Gen) dfs(pkg []string, path []string, m Message, mut state map[string]
 	}
 }
 
-// is this singular message field marked for ?&T boxing to break a recursion cycle?
+// is this message field (singular or oneof arm) boxed to break a recursion cycle?
 fn (g &Gen) is_boxed(scope []string, fnum int) bool {
 	if g.boxed.len == 0 {
 		return false
@@ -650,10 +653,11 @@ fn (mut g Gen) emit_message(mut b strings.Builder, path []string, m Message) ! {
 			info := g.field_info(scope, vname, fld)!
 			at := '${vname}_${camel(fld.name)}'
 			arm_types << at
+			box := if info.kind == .message && g.is_boxed(scope, fld.number) { '&' } else { '' }
 			b.writeln('')
 			b.writeln('pub struct ${at} {')
 			b.writeln('pub mut:')
-			b.writeln('\tvalue ${info.vtype}')
+			b.writeln('\tvalue ${box}${info.vtype}')
 			b.writeln('}')
 		}
 		b.writeln('')
@@ -1144,8 +1148,14 @@ fn (mut g Gen) emit_decode_field(mut b strings.Builder, scope []string, vname st
 			b.writeln('\t\t\t\t\t}')
 			b.writeln('\t\t\t\t}')
 			b.writeln('\t\t\t\tmb_${name} << mv_${name}')
-			b.writeln('\t\t\t\tm.${of} = ${arm}{')
-			b.writeln('\t\t\t\t\tvalue: ${info.vtype}.decode(mb_${name})!')
+			if g.is_boxed(scope, fld.number) {
+				b.writeln('\t\t\t\tbox_${name} := ${info.vtype}.decode(mb_${name})!')
+				b.writeln('\t\t\t\tm.${of} = ${arm}{')
+				b.writeln('\t\t\t\t\tvalue: &box_${name}')
+			} else {
+				b.writeln('\t\t\t\tm.${of} = ${arm}{')
+				b.writeln('\t\t\t\t\tvalue: ${info.vtype}.decode(mb_${name})!')
+			}
 			b.writeln('\t\t\t\t}')
 			b.writeln('\t\t\t}')
 			return

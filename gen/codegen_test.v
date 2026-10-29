@@ -493,8 +493,8 @@ message Leaf {
 	assert res.output.contains('REC OK'), res.output
 }
 
-// sum types box their variants, so a oneof arm may recurse; prove it
-// end-to-end since the recursion check waves it through
+// V lays sum types out inline, so a recursive oneof arm holds its value
+// as &T; prove the boxed arm round-trips end-to-end
 fn test_oneof_self_reference_e2e() ! {
 	f :=
 		parse('syntax = "proto3"; message Node { int32 val = 1; oneof next { Node child = 2; bool stop = 3; } }')!
@@ -505,11 +505,15 @@ fn test_oneof_self_reference_e2e() ! {
 		os.rmdir_all(dir) or {}
 	}
 	os.write_file(os.join_path(dir, 'node_pb.v'), code)!
-	os.write_file(os.join_path(dir, 'main.v'), "fn main() {
+	// `module main` matters: V drops a custom == across files that disagree on
+	// declaring their module, and the boxed arm needs Node's value ==
+	os.write_file(os.join_path(dir, 'main.v'), "module main
+
+fn main() {
 	n := Node{
 		val:  1
 		next: Node_Child{
-			value: Node{
+			value: &Node{
 				val:  2
 				next: Node_Stop{
 					value: false

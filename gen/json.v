@@ -285,8 +285,14 @@ fn (mut g Gen) emit_json_field_in(mut b strings.Builder, scope []string, vname s
 		b.writeln('\t\t\t\tif m.${sanitize(fld.oneof)} != none {')
 		b.writeln("\t\t\t\t\treturn error('protojson: multiple values for oneof ${fld.oneof}')")
 		b.writeln('\t\t\t\t}')
-		b.writeln('\t\t\t\tm.${sanitize(fld.oneof)} = ${vname}_${camel(fld.name)}{')
-		b.writeln('\t\t\t\t\tvalue: ${g.json_field_parse(info, fld, 'jv')}')
+		if info.kind == .message && g.is_boxed(scope, fld.number) {
+			b.writeln('\t\t\t\tbox_${name} := ${g.json_field_parse(info, fld, 'jv')}')
+			b.writeln('\t\t\t\tm.${sanitize(fld.oneof)} = ${vname}_${camel(fld.name)}{')
+			b.writeln('\t\t\t\t\tvalue: &box_${name}')
+		} else {
+			b.writeln('\t\t\t\tm.${sanitize(fld.oneof)} = ${vname}_${camel(fld.name)}{')
+			b.writeln('\t\t\t\t\tvalue: ${g.json_field_parse(info, fld, 'jv')}')
+		}
 		b.writeln('\t\t\t\t}')
 	} else if fld.is_map {
 		b.writeln('\t\t\t\tfor mk, mv in protobuf.json_object(jv)! {')

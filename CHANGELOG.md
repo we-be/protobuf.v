@@ -26,6 +26,13 @@ modules; they are runtime-internal and not covered by the semver contract.
   truncate now, so every value an `int` can hold round-trips against protoc.
   Generated code calls new runtime-internal helpers `protobuf.int32_wire` /
   `protobuf.sint32_wire` — regenerate stubs with `vpbgen`.
+- **A recursive oneof arm compiles on current V.** V now lays sum types out
+  inline (vlang/v#29578), so a oneof arm that leads back to its own message
+  is an infinitely sized type and no longer compiles. The recursion walk now
+  covers oneof arms, and the arm that closes a cycle holds its value as `&T`:
+  build it as `Node_Child{value: &Node{...}}`. Only a recursive arm changes —
+  every other arm keeps its by-value `value`. Such messages get the same
+  encoding-based `==` as the `?&T`-boxed ones. CI pins V ee35432ff0.
 
 ## [1.3.0] - 2026-08-11
 
