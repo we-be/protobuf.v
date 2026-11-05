@@ -351,19 +351,43 @@ pub fn parse_timestamp_rfc3339(s string) !(i64, int) {
 	return secs, t.nanosecond
 }
 
+// json_bytesv reads a bytes field: base64 in the standard or the URL-safe
+// alphabet, padded or not, which is what the protojson spec has a parser
+// accept. The string is checked before it is decoded because vlib's
+// base64.decode checks nothing — it looks every byte up in a table that ends
+// at `z`, so a byte past that reads beyond the table and any other stray byte
+// counts as zero bits. Either way a malformed string came back as bytes nobody
+// sent, where Go's protojson refuses it.
 pub fn json_bytesv(a json2.Any) ![]u8 {
 	s := json_stringv(a)!
-	if s == '' {
-		return []u8{}
+	// padding only ever completes the last quantum, so it is one or two `=`
+	// closing a string whose length is a multiple of four
+	mut n := s.len
+	if n > 0 && n % 4 == 0 && s[n - 1] == `=` {
+		n -= if s[n - 2] == `=` { 2 } else { 1 }
 	}
-	if s.contains('-') || s.contains('_') {
-		return base64.url_decode(s)
+	mut url_safe := false
+	for i in 0 .. n {
+		c := s[i]
+		if c == `-` || c == `_` {
+			url_safe = true
+		} else if !(c.is_alnum() || c == `+` || c == `/`) {
+			return error('protojson: invalid base64 `${s}`')
+		}
 	}
-	out := base64.decode(s)
-	if out.len == 0 {
+	// a lone trailing character carries six bits, which is not a byte
+	if n % 4 == 1 {
 		return error('protojson: invalid base64 `${s}`')
 	}
-	return out
+	if !url_safe && s.len % 4 == 0 {
+		return base64.decode(s)
+	}
+	// vlib decodes the standard alphabet only, and nothing at all unpadded
+	mut std := s[..n]
+	if url_safe {
+		std = std.replace_each(['-', '+', '_', '/'])
+	}
+	return base64.decode(std + '='.repeat((4 - n % 4) % 4))
 }
 
 pub fn json_int32v(a json2.Any) !int {

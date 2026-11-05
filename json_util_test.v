@@ -80,3 +80,67 @@ fn test_nonfinite_numbers_rejected_for_ints() {
 	assert json_intv(json2.Any(f64(-3))) or { -1 } == -3
 	assert json_uintv(json2.Any(f64(7))) or { 0 } == 7
 }
+
+// a bytes field is base64 in either alphabet, padded or not (the protojson
+// spec's "standard or URL-safe, with/without paddings")
+fn test_bytes_accept_either_alphabet_padded_or_not() {
+	cases := {
+		'':         ''
+		'QQ==':     'A'
+		'QQ':       'A'
+		'QUI=':     'AB'
+		'QUI':      'AB'
+		'QUJD':     'ABC'
+		'QUJDRA==': 'ABCD'
+		'QUJDRA':   'ABCD'
+		'QUJDREU':  'ABCDE'
+		'+/+/':     '\xfb\xff\xbf'
+		'-_-_':     '\xfb\xff\xbf'
+		'-_8=':     '\xfb\xff'
+		'-_8':      '\xfb\xff'
+		// one alphabet per string is what an encoder writes, but a mix has
+		// always been read here (Go's protojson refuses it)
+		'+_-/':     '\xfb\xff\xbf'
+		// the bits padding stands in for are not checked, as in the references
+		'QR==':     'A'
+	}
+	for src, want in cases {
+		got := json_bytesv(json2.Any(src)) or {
+			assert false, 'rejected `${src}`: ${err.msg()}'
+			return
+		}
+		assert got == want.bytes(), '`${src}` decoded to ${got}'
+	}
+}
+
+// vlib's decoder checks nothing: a byte outside the alphabet counts as zero
+// bits, and one past `z` indexes beyond its lookup table. Each of these used to
+// come back as bytes nobody sent.
+fn test_bytes_reject_what_is_not_base64() {
+	for src in [
+		'Q', // six bits is not a byte
+		'QUJDR',
+		'=',
+		'====',
+		'Q===',
+		'QQ=', // padding that does not complete the quantum
+		'QUI==',
+		'QUJD=',
+		'QQ==QQ==', // padding anywhere but the end
+		'QQ=Q',
+		'QU JD', // whitespace
+		'QUJD\n\n\n\n', // Go's protojson skips CR and LF; RFC 4648 refuses them
+		'QU,D', // near misses the table maps to 62 and 63
+		'QU.D',
+		'!!!!',
+		'{{{{', // past `z`: beyond the table
+		'~~~~',
+		'QUé=',
+		'\x80\x80\x80\x80',
+		'\xff\xff\xff\xff',
+	] {
+		if got := json_bytesv(json2.Any(src)) {
+			assert false, 'accepted `${src.bytes().hex()}` as ${got}'
+		}
+	}
+}

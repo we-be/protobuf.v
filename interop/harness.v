@@ -343,6 +343,24 @@ fn main() {
 				}
 			}
 			println('parsed ${names.len} Go protojson files back, byte-identical')
+			// bytes spellings: each document in bytes_cases.jsonl must read the
+			// way protojson read it — the same bytes, or a refusal. Two
+			// spellings are deliberately not in the file, because there we
+			// differ from Go on purpose: it skips CR and LF inside base64, which
+			// RFC 4648 has a decoder refuse, and it refuses a string that mixes
+			// the two alphabets, which this parser has always read.
+			docs := os.read_lines('bytes_cases.jsonl')!
+			verdicts := os.read_lines('${dir}/bytes.go.txt')!
+			if docs.len != verdicts.len {
+				fail('bytes: ${docs.len} cases but ${verdicts.len} protojson verdicts')
+			}
+			for i, doc in docs {
+				mine := if m := Scalars.from_json(doc) { 'ok:${m.i.hex()}' } else { 'reject' }
+				if mine != verdicts[i] {
+					fail('bytes: ${doc} — protojson says ${verdicts[i]}, we say ${mine}')
+				}
+			}
+			println('read ${docs.len} bytes spellings the way protojson does')
 		}
 		else {
 			fail('unknown mode ${mode}')

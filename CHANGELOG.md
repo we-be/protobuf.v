@@ -33,6 +33,16 @@ modules; they are runtime-internal and not covered by the semver contract.
   build it as `Node_Child{value: &Node{...}}`. Only a recursive arm changes —
   every other arm keeps its by-value `value`. Such messages get the same
   encoding-based `==` as the `?&T`-boxed ones. CI pins V ee35432ff0.
+- **A JSON `bytes` field refuses what is not base64.** vlib's `base64.decode`
+  validates nothing: a byte outside the alphabet counts as zero bits, and one
+  past `z` indexes beyond its lookup table. So a malformed string parsed into
+  bytes nobody sent instead of failing, and anything that hands `from_json`
+  untrusted input — grpc.v's Connect JSON codec does — let a peer drive that
+  out-of-range read. The string is now checked before it is decoded: either
+  alphabet, padded or not, and nothing else. That also admits unpadded
+  standard base64, which the protojson spec has a parser accept and which used
+  to be refused. `interop/run.sh` holds the parser to Go's protojson, spelling
+  by spelling (`interop/bytes_cases.jsonl`).
 
 ## [1.3.0] - 2026-08-11
 

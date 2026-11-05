@@ -1,12 +1,15 @@
 // JSON oracle: protojson must accept every JSON file the V side emitted
 // and decode it to the same message as the binary; then it emits its own
-// JSON (.go.json) for the V side to parse back.
+// JSON (.go.json) for the V side to parse back. It also records how it reads
+// each base64 spelling in bytes_cases.jsonl, which the V side must match.
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -19,6 +22,25 @@ func die(err error) {
 		fmt.Fprintln(os.Stderr, "FAIL:", err)
 		os.Exit(1)
 	}
+}
+
+// bytesOracle writes protojson's verdict on each document in
+// bytes_cases.jsonl, one per line: the bytes field it decoded, or a refusal.
+func bytesOracle(dir string) int {
+	src, err := os.ReadFile("bytes_cases.jsonl")
+	die(err)
+	docs := strings.Split(strings.TrimSuffix(string(src), "\n"), "\n")
+	var out strings.Builder
+	for _, doc := range docs {
+		var m pb.Scalars
+		if err := protojson.Unmarshal([]byte(doc), &m); err != nil {
+			out.WriteString("reject\n")
+		} else {
+			out.WriteString("ok:" + hex.EncodeToString(m.I) + "\n")
+		}
+	}
+	die(os.WriteFile(dir+"/bytes.go.txt", []byte(out.String()), 0o644))
+	return len(docs)
 }
 
 func main() {
@@ -49,4 +71,5 @@ func main() {
 		die(os.WriteFile(dir+"/"+n+".go.json", gj, 0o644))
 	}
 	fmt.Printf("jsoncheck OK: %d V JSON files accepted by protojson\n", len(names))
+	fmt.Printf("recorded protojson's reading of %d bytes spellings\n", bytesOracle(dir))
 }
