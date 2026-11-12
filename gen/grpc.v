@@ -239,11 +239,13 @@ fn (mut g Gen) emit_grpc_call(mut b strings.Builder, svc Service, prefix string,
 			b.writeln('\t\t\tresp := s.h.${method}(mut ctx, msgs)!')
 			b.writeln('\t\t\treturn [resp.encode()], true')
 		} else {
-			// unary and server-streaming both take exactly one request message
+			// unary and server-streaming both take exactly one request message.
+			// Any other count is a cardinality violation: connect-go answers it
+			// with unimplemented, and the official conformance suite expects that.
 			b.writeln('\t\t\tif reqs.len != 1 {')
 			b.writeln('\t\t\t\treturn grpc.StatusError{')
 			b.writeln('\t\t\t\t\tstatus: grpc.Status{')
-			b.writeln('\t\t\t\t\t\tcode:    .invalid_argument')
+			b.writeln('\t\t\t\t\t\tcode:    .unimplemented')
 			b.writeln("\t\t\t\t\t\tmessage: '${m.name} expects exactly one request message'")
 			b.writeln('\t\t\t\t\t}')
 			b.writeln('\t\t\t\t}')

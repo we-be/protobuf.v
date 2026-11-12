@@ -14,6 +14,14 @@ modules; they are runtime-internal and not covered by the semver contract.
 
 ## [Unreleased]
 
+### Changed
+- **A unary or server-streaming rpc sent zero or several request messages is
+  `unimplemented`** in the generated `grpc_call` dispatch (was
+  `invalid_argument`). That is what connect-go answers to the same cardinality
+  violation and what the official conformance suite expects of a gRPC server;
+  grpc.v's `GrpcServer` passes those two cases now. `-grpc` stub codegen only,
+  outside the frozen message API — regenerate stubs with `vpbgen`.
+
 ### Fixed
 - **32-bit scalars keep 32-bit wire semantics under V's 64-bit `int`.**
   vlang/v#28293 made `int` 64-bit on 64-bit targets, so the type stopped
