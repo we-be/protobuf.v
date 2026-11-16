@@ -21,8 +21,7 @@ jobs:
           - os: macos-15-intel
             target: macos-amd64
     runs-on: ${{ matrix.os }}
-    # setup-v drops the whole V toolchain into the workspace root — keep
-    # our tree in a subdir (same as ci.yml)
+    # keep our tree in a subdir (same as ci.yml)
     defaults:
       run:
         working-directory: repo
@@ -31,10 +30,9 @@ jobs:
         with:
           path: repo
 
+      # the V commit CI tests against (.v-version) — no V release bootstraps
       - name: Setup V
-        uses: vlang/setup-v@v1
-        with:
-          check-latest: true
+        run: ./.github/setup-v.sh
 
       # vpbgen imports protobuf.gen, resolved through vmodules
       - name: Link module into vmodules
@@ -60,10 +58,9 @@ jobs:
         with:
           path: repo
 
+      # the V commit CI tests against (.v-version) — no V release bootstraps
       - name: Setup V
-        uses: vlang/setup-v@v1
-        with:
-          check-latest: true
+        run: ./.github/setup-v.sh
 
       - uses: actions/setup-go@v5
         with:
