@@ -147,7 +147,7 @@ fn main() {
 	println(\'JSON OK\')
 }')!
 	vexe := os.getenv_opt('VEXE') or { 'v' }
-	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(edir)}')
+	res := os.exec([vexe, 'run', edir])
 	assert res.exit_code == 0, res.output
 	assert res.output.contains('JSON OK'), res.output
 }

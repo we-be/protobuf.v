@@ -179,7 +179,7 @@ fn test_generated_roundtrip() ! {
 	os.write_file(os.join_path(dir, 'demo_pb.v'), code)!
 	os.write_file(os.join_path(dir, 'main.v'), harness_src)!
 	vexe := os.getenv_opt('VEXE') or { 'v' }
-	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	res := os.exec([vexe, 'run', dir])
 	assert res.exit_code == 0, res.output
 	assert res.output.contains('ROUNDTRIP OK'), res.output
 }
@@ -243,7 +243,7 @@ message Hollow {}')!
 	println('UNKNOWN OK')
 }")!
 	vexe := os.getenv_opt('VEXE') or { 'v' }
-	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	res := os.exec([vexe, 'run', dir])
 	assert res.exit_code == 0, res.output
 	assert res.output.contains('UNKNOWN OK'), res.output
 }
@@ -277,7 +277,7 @@ message Outer {
 	println('QUAL OK')
 }")!
 	vexe := os.getenv_opt('VEXE') or { 'v' }
-	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	res := os.exec([vexe, 'run', dir])
 	assert res.exit_code == 0, res.output
 	assert res.output.contains('QUAL OK'), res.output
 }
@@ -330,7 +330,7 @@ message Rec {
 	println(\'BOOLMAP OK\')
 }')!
 	vexe := os.getenv_opt('VEXE') or { 'v' }
-	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	res := os.exec([vexe, 'run', dir])
 	assert res.exit_code == 0, res.output
 	assert res.output.contains('BOOLMAP OK'), res.output
 }
@@ -403,7 +403,7 @@ message Rec {
 	println('MANGLE OK')
 }")!
 	vexe := os.getenv_opt('VEXE') or { 'v' }
-	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	res := os.exec([vexe, 'run', dir])
 	assert res.exit_code == 0, res.output
 	assert res.output.contains('MANGLE OK'), res.output
 }
@@ -488,7 +488,7 @@ message Leaf {
 	println('REC OK')
 }")!
 	vexe := os.getenv_opt('VEXE') or { 'v' }
-	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	res := os.exec([vexe, 'run', dir])
 	assert res.exit_code == 0, res.output
 	assert res.output.contains('REC OK'), res.output
 }
@@ -526,7 +526,7 @@ fn main() {
 	println('REC OK')
 }")!
 	vexe := os.getenv_opt('VEXE') or { 'v' }
-	res := os.execute('${os.quoted_path(vexe)} run ${os.quoted_path(dir)}')
+	res := os.exec([vexe, 'run', dir])
 	assert res.exit_code == 0, res.output
 	assert res.output.contains('REC OK'), res.output
 }

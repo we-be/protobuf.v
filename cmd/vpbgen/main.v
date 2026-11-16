@@ -31,7 +31,7 @@ fn write_out(path string, code string) {
 	os.write_file(path, code) or { fail('cannot write ${path}: ${err}') }
 	vexe := os.getenv('VEXE')
 	if vexe != '' {
-		os.execute('${os.quoted_path(vexe)} fmt -w ${os.quoted_path(path)}')
+		os.exec([vexe, 'fmt', '-w', path])
 	}
 	println('generated ${path}')
 }

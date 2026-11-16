@@ -51,6 +51,10 @@ modules; they are runtime-internal and not covered by the semver contract.
   standard base64, which the protojson spec has a parser accept and which used
   to be refused. `interop/run.sh` holds the parser to Go's protojson, spelling
   by spelling (`interop/bytes_cases.jsonl`).
+- **`vpbgen` builds with `-prod` on current V.** It ran `v fmt` through
+  `os.execute`, which V now deprecates, and `-prod` makes a deprecation an
+  error — so the release binaries could not build. It calls `os.exec` with an
+  argument array now.
 
 ## [1.3.0] - 2026-08-11
 
